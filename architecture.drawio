@@ -1,19 +1,19 @@
 <mxfile host="65bd71144e">
     <diagram id="KgYDi0288DGexm8bX6zW" name="Page-1">
-        <mxGraphModel dx="1903" dy="1225" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+        <mxGraphModel dx="1405" dy="974" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
-                <mxCell id="16" value="" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                <mxCell id="16" value="" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="760" y="570" width="410" height="490" as="geometry"/>
                 </mxCell>
-                <mxCell id="12" value="" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-                    <mxGeometry x="320" y="40" width="750" height="450" as="geometry"/>
+                <mxCell id="12" value="" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="320" y="50" width="750" height="300" as="geometry"/>
                 </mxCell>
-                <mxCell id="7" value="" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                <mxCell id="7" value="" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="300" y="600" width="380" height="490" as="geometry"/>
                 </mxCell>
-                <mxCell id="14" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="2" target="3">
+                <mxCell id="14" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="2" target="3" edge="1">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points">
                             <mxPoint x="420" y="520"/>
@@ -21,7 +21,7 @@
                         </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="22" style="edgeStyle=none;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="2" target="17">
+                <mxCell id="22" style="edgeStyle=none;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="2" target="17" edge="1">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points">
                             <mxPoint x="420" y="520"/>
@@ -29,40 +29,45 @@
                         </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="2" value="&amp;nbsp;Leader" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                <mxCell id="23" value="reach out over ssh&lt;br&gt;at polling intervals to ensure" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="22">
+                    <mxGeometry x="-0.4211" y="1" relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="2" value="&amp;nbsp;Leader" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="360" y="80" width="120" height="60" as="geometry"/>
                 </mxCell>
-                <mxCell id="3" value="" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                <mxCell id="3" value="" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="320" y="620" width="120" height="60" as="geometry"/>
                 </mxCell>
-                <mxCell id="4" value="" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                <mxCell id="4" value="" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="330" y="630" width="120" height="60" as="geometry"/>
                 </mxCell>
-                <mxCell id="5" value="" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                <mxCell id="5" value="" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="340" y="640" width="120" height="60" as="geometry"/>
                 </mxCell>
-                <mxCell id="6" value="workers" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                <mxCell id="6" value="workers" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="350" y="650" width="120" height="60" as="geometry"/>
                 </mxCell>
-                <mxCell id="11" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;Inference Worker Responsibilites&lt;/h1&gt;&lt;p&gt;- run llama.cpp or vllm instance&lt;/p&gt;&lt;p&gt;- healthcheck&lt;/p&gt;" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" vertex="1" parent="1">
+                <mxCell id="11" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;Inference Worker Responsibilites&lt;/h1&gt;&lt;p&gt;- run llama.cpp&lt;/p&gt;" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" parent="1" vertex="1">
                     <mxGeometry x="320" y="750" width="260" height="280" as="geometry"/>
                 </mxCell>
-                <mxCell id="15" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;Leader Responsibilites&lt;/h1&gt;&lt;p&gt;- frontend webpage for users to login&lt;/p&gt;&lt;p&gt;&lt;span style=&quot;white-space: pre;&quot;&gt;&#x9;&lt;/span&gt;- logged in users can issue auth tokens&lt;br&gt;&lt;/p&gt;&lt;p&gt;- proxy user inference requests to worker nodes&lt;/p&gt;&lt;p&gt;- track usage/performance metrics coming back from owrkers&lt;/p&gt;&lt;p&gt;- manage healthchecks of workers&lt;/p&gt;&lt;p&gt;- admin dashboard&lt;/p&gt;&lt;p&gt;&lt;span style=&quot;white-space: pre;&quot;&gt;&#x9;&lt;/span&gt;- allow admin to deploy models from huggingface and reconfigure workers&lt;br&gt;&lt;/p&gt;" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" vertex="1" parent="1">
+                <mxCell id="15" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;Leader Responsibilites&lt;/h1&gt;&lt;p&gt;- frontend webpage for users to login&lt;/p&gt;&lt;p&gt;&lt;span style=&quot;white-space: pre;&quot;&gt;&#x9;&lt;/span&gt;- logged in users can issue auth tokens&lt;br&gt;&lt;/p&gt;&lt;p&gt;- proxy user inference requests to worker nodes&lt;/p&gt;&lt;p&gt;- track usage/performance metrics coming back from owrkers&lt;/p&gt;&lt;p&gt;- manage healthchecks of workers&lt;/p&gt;&lt;p&gt;- admin dashboard&lt;/p&gt;&lt;p&gt;&lt;span style=&quot;white-space: pre;&quot;&gt;&#x9;&lt;/span&gt;- allow admin to deploy models from huggingface and reconfigure workers&lt;br&gt;&lt;/p&gt;" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" parent="1" vertex="1">
                     <mxGeometry x="540" y="80" width="440" height="300" as="geometry"/>
                 </mxCell>
-                <mxCell id="17" value="" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                <mxCell id="17" value="" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="780" y="590" width="120" height="60" as="geometry"/>
                 </mxCell>
-                <mxCell id="18" value="" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                <mxCell id="18" value="" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="790" y="600" width="120" height="60" as="geometry"/>
                 </mxCell>
-                <mxCell id="19" value="" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                <mxCell id="19" value="" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="800" y="610" width="120" height="60" as="geometry"/>
                 </mxCell>
-                <mxCell id="20" value="workers" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                <mxCell id="20" value="workers" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="810" y="620" width="120" height="60" as="geometry"/>
                 </mxCell>
-                <mxCell id="21" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;Downloader Worker Responsibilites&lt;/h1&gt;&lt;p&gt;- run llama.cpp or vllm instance&lt;/p&gt;&lt;p&gt;- healthcheck&lt;/p&gt;&lt;p&gt;- verify auth from leader&lt;/p&gt;&lt;p&gt;- download/report download status of models&lt;/p&gt;" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" vertex="1" parent="1">
+                <mxCell id="21" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;Downloader Worker Responsibilites&lt;/h1&gt;&lt;p&gt;- run llama.cpp or vllm instance&lt;/p&gt;&lt;p&gt;- healthcheck&lt;/p&gt;&lt;p&gt;- verify auth from leader&lt;/p&gt;&lt;p&gt;- download/report download status of models&lt;/p&gt;" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" parent="1" vertex="1">
                     <mxGeometry x="800" y="730" width="280" height="280" as="geometry"/>
                 </mxCell>
             </root>

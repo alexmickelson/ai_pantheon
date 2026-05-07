@@ -1,0 +1,162 @@
+defmodule PantheonWeb.AuthController do
+  use PantheonWeb, :controller
+  require Logger
+
+  @doc false
+  def call(conn, action) do
+    try do
+      super(conn, action)
+    rescue
+      e in Oidcc.Plug.Authorize.Error ->
+        Logger.error("OIDC authorize failed reason=#{inspect(e.reason)}")
+
+        conn
+        |> put_flash(:error, "Login unavailable: #{inspect(e.reason)}")
+        |> redirect(to: ~p"/")
+        |> halt()
+    end
+  end
+
+  def client_id,
+    do: Application.fetch_env!(:pantheon, :oidc) |> Keyword.fetch!(:client_id)
+
+  def callback_uri(conn) do
+    default_port = URI.default_port(to_string(conn.scheme))
+    port_str = if conn.port == default_port, do: "", else: ":#{conn.port}"
+    "#{conn.scheme}://#{conn.host}#{port_str}/auth/callback"
+  end
+
+  @pkce_profile_opts %{require_pkce: true}
+
+  plug :save_return_to when action in [:authorize]
+
+  plug Oidcc.Plug.Authorize,
+       [
+         provider: Pantheon.OidcProvider,
+         client_id: &__MODULE__.client_id/0,
+         client_secret: :unauthenticated,
+         redirect_uri: &__MODULE__.callback_uri/1,
+         client_profile_opts: @pkce_profile_opts,
+         scopes: ["openid", "profile", "email"]
+       ]
+       when action in [:authorize]
+
+  plug Oidcc.Plug.AuthorizationCallback,
+       [
+         provider: Pantheon.OidcProvider,
+         client_id: &__MODULE__.client_id/0,
+         client_secret: :unauthenticated,
+         redirect_uri: &__MODULE__.callback_uri/1,
+         client_profile_opts: @pkce_profile_opts,
+         preferred_auth_methods: [:none],
+         check_peer_ip: false,
+         check_useragent: false
+       ]
+       when action in [:callback]
+
+  def authorize(conn, _params), do: conn
+
+  def callback(
+        %Plug.Conn{private: %{Oidcc.Plug.AuthorizationCallback => {:ok, {token, userinfo}}}} =
+          conn,
+        _params
+      ) do
+    email = Map.get(userinfo, "email")
+    token_exp = Map.get(token.id.claims, "exp")
+    Logger.info("User login successful email=#{email}")
+
+    refresh_token =
+      case token.refresh do
+        %Oidcc.Token.Refresh{token: rt} -> rt
+        _ -> nil
+      end
+
+    return_to = get_session(conn, "return_to") || "/"
+
+    conn
+    |> configure_session(renew: true)
+    |> delete_session("return_to")
+    |> put_session("oidc_claims", userinfo)
+    |> put_session("current_user_id", email)
+    |> put_session("session_expires_at", token_exp)
+    |> put_session("token_expires_at", token_exp)
+    |> put_session("refresh_token", refresh_token)
+    |> put_session("oidc_sub", Map.get(userinfo, "sub"))
+    |> redirect(to: return_to)
+  end
+
+  def callback(
+        %Plug.Conn{private: %{Oidcc.Plug.AuthorizationCallback => {:error, reason}}} = conn,
+        _params
+      ) do
+    Logger.warning("User login failed reason=#{inspect(reason)}")
+
+    conn
+    |> put_status(400)
+    |> put_flash(:error, "Login failed: #{inspect(reason)}")
+    |> redirect(to: ~p"/")
+  end
+
+  def logout(conn, _params) do
+    conn
+    |> clear_session()
+    |> redirect(to: ~p"/")
+  end
+
+  def refresh(conn, _params) do
+    refresh_token = get_session(conn, "refresh_token")
+    claims = get_session(conn, "oidc_claims")
+    sub = claims && Map.get(claims, "sub")
+
+    with true <- is_binary(refresh_token) and is_binary(sub),
+         {:ok, client_context} <-
+           Oidcc.ClientContext.from_configuration_worker(
+             Pantheon.OidcProvider,
+             client_id(),
+             :unauthenticated
+           ),
+         {:ok, new_token} <-
+           Oidcc.Token.refresh(refresh_token, client_context, %{expected_subject: sub}) do
+      new_exp = Map.get(new_token.id.claims, "exp")
+
+      new_refresh =
+        case new_token.refresh do
+          %Oidcc.Token.Refresh{token: rt} -> rt
+          _ -> refresh_token
+        end
+
+      Logger.info("auth_controller.refresh success sub=#{sub} new_exp=#{new_exp}")
+
+      conn
+      |> put_session("session_expires_at", new_exp)
+      |> put_session("token_expires_at", new_exp)
+      |> put_session("refresh_token", new_refresh)
+      |> json(%{exp: new_exp})
+    else
+      false ->
+        Logger.warning("auth_controller.refresh missing refresh_token or sub, returning 401")
+        send_resp(conn, 401, "")
+
+      {:error, reason} ->
+        Logger.error(
+          "auth_controller.refresh OIDC error sub=#{inspect(sub)} reason=#{inspect(reason)}"
+        )
+
+        send_resp(conn, 401, "")
+
+      other ->
+        Logger.error(
+          "auth_controller.refresh unexpected failure sub=#{inspect(sub)} result=#{inspect(other)}"
+        )
+
+        send_resp(conn, 401, "")
+    end
+  end
+
+  defp save_return_to(conn, _opts) do
+    case conn.params["return_to"] do
+      "/" <> _ = path -> put_session(conn, "return_to", path)
+      _ -> conn
+    end
+  end
+end

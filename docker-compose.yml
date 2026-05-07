@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: pantheon_user
+      POSTGRES_PASSWORD: pantheon_pass
+      POSTGRES_DB: pantheon_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pantheon_user -d pantheon_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: dev.Dockerfile
+    ports:
+      - "4000:4000"
+    command: mix phx.server
+    volumes:
+      - .:/app
+      - deps_cache:/app/deps
+      - build_cache:/app/_build
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ecto://pantheon_user:pantheon_pass@db/pantheon_dev
+      PHX_SERVER: "true"
+      MIX_ENV: dev
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  deps_cache:
+  build_cache:

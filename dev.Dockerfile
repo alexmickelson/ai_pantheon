@@ -18,11 +18,10 @@ USER elixir
 RUN mix local.hex --force && \
     mix local.rebar --force
 
-COPY mix.exs mix.lock ./
+COPY --chown=elixir:elixir mix.exs mix.lock ./
 RUN mix deps.get
 
-COPY assets assets/
-RUN cd assets && npm install
+COPY --chown=elixir:elixir assets assets/
 
 EXPOSE 4000
 

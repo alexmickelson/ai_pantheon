@@ -40,3 +40,4 @@ npm-debug.log
 .env.dev
 .env
 
+.elixir_ls/

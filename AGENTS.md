@@ -25,6 +25,9 @@ Read application logs with `docker logs ai_pantheon-app-1`
 
 when checking if changes compile use `mix compile` on the terminal (not in container)
 
+make sure that all error messages are unique so they can be searched and include enough information to reproduce the situation. do not include exact function names in error messages, describe the situation
+
+use pattern matching on function parameters to enforce requried structure
 
 ---
 

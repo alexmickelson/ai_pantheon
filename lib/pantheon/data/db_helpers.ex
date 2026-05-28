@@ -17,15 +17,15 @@ defmodule Pantheon.Data.DbHelpers do
 
       Enum.map(result.rows || [], fn row ->
         Enum.zip(result.columns, row)
-        |> Enum.map(fn {col, val} -> {col, format_uuid_binary(val)} end)
+        |> Enum.map(fn {col, val} -> {col, format_db_value(col, val)} end)
         |> Enum.into(%{})
       end)
     rescue
       exception ->
-        Logger.error("Database error: #{Exception.message(exception)}")
+        Logger.error("Database query failed: #{Exception.message(exception)}")
         Logger.error("Failed SQL: #{original_sql}")
         Logger.error("SQL params: #{inspect(original_params, pretty: true)}")
-        {:error, :db_error}
+        {:error, {:db_error, Exception.message(exception)}}
     end
   end
 
@@ -60,6 +60,61 @@ defmodule Pantheon.Data.DbHelpers do
 
   defp parse_uuid_string_to_binary(val), do: val
 
+  @datetime_columns ~w(inserted_at updated_at)a
+
+  defp format_db_value(col, val) when col in @datetime_columns do
+    convert_datetime(val)
+  end
+
+  defp format_db_value(_col, val) do
+    format_uuid_binary(val)
+  end
+
+  defp convert_datetime({{{y, m, d}, {h, min, s, us}}, {_timezone, offset_min, _tz}})
+       when is_integer(us) do
+    microsecond = rem(us, 1_000_000)
+
+    %NaiveDateTime{
+      year: y,
+      month: m,
+      day: d,
+      hour: h,
+      minute: min,
+      second: s,
+      microsecond: {microsecond, 6}
+    }
+    |> DateTime.from_naive!(timezone_from_offset(offset_min))
+  rescue
+    _ -> convert_datetime_fallback(y, m, d, h, min, s, us)
+  end
+
+  defp convert_datetime({{{y, m, d}, {h, min, s}}, _}) when is_integer(s) do
+    convert_datetime_fallback(y, m, d, h, min, s, 0)
+  end
+
+  defp convert_datetime(val), do: val
+
+  defp convert_datetime_fallback(y, m, d, h, min, s, us) do
+    %NaiveDateTime{
+      year: y,
+      month: m,
+      day: d,
+      hour: h,
+      minute: min,
+      second: s,
+      microsecond: {rem(us, 1_000_000), 6}
+    }
+    |> DateTime.from_naive!("Etc/UTC")
+  end
+
+  defp timezone_from_offset(offset_min) do
+    cond do
+      offset_min == 0 -> "Etc/UTC"
+      offset_min > 0 -> "Etc/GMT-#{Integer.to_string(div(offset_min, 60))}"
+      true -> "Etc/GMT+#{Integer.to_string(div(abs(offset_min), 60))}"
+    end
+  end
+
   defp format_uuid_binary(<<a::4-bytes, b::2-bytes, c::2-bytes, d::2-bytes, e::6-bytes>>) do
     [a, b, c, d, e]
     |> Enum.map(&Base.encode16(&1, case: :lower))
@@ -75,13 +130,13 @@ defmodule Pantheon.Data.DbHelpers do
           fun.()
         rescue
           e ->
-            Logger.error("Transaction callback raised: #{Exception.message(e)}")
+            Logger.error("Database transaction failed inside callback: #{Exception.message(e)}")
             {:error, e}
         end
 
       case result do
         {:error, reason} ->
-          Logger.error("Transaction rolling back reason=#{inspect(reason)}")
+          Logger.error("Database transaction rolled back: #{inspect(reason)}")
           Pantheon.Repo.rollback(reason)
 
         other ->
@@ -93,12 +148,12 @@ defmodule Pantheon.Data.DbHelpers do
         result
 
       {:error, reason} = err ->
-        Logger.error("Transaction failed reason=#{inspect(reason)}")
+        Logger.error("Database transaction failed to commit: #{inspect(reason)}")
         err
     end
   end
 
-  defp validate_rows({:error, :db_error}, _schema), do: {:error, :db_error}
+  defp validate_rows({:error, reason}, _schema), do: {:error, reason}
 
   defp validate_rows(rows, schema) do
     Enum.reduce_while(rows, {:ok, []}, fn row, {:ok, acc} ->
@@ -107,8 +162,8 @@ defmodule Pantheon.Data.DbHelpers do
           {:cont, {:ok, [valid | acc]}}
 
         {:error, errors} ->
-          Logger.error("Schema validation error: #{inspect(errors)}")
-          {:halt, {:error, :validation_error}}
+          Logger.error("Database query result did not match expected schema: #{inspect(errors)}")
+          {:halt, {:error, {:validation_error, inspect(errors)}}}
       end
     end)
     |> then(fn

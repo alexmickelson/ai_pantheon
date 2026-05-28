@@ -28,7 +28,7 @@ defmodule Pantheon.Data.AIProviderDB do
 
       {:error, reason} ->
         Logger.error(
-          "Failed to list ai_providers for user #{inspect(user_id)}: #{inspect(reason)}"
+          "Could not load AI providers for user #{inspect(user_id)}: #{inspect(reason)}"
         )
 
         []
@@ -36,6 +36,8 @@ defmodule Pantheon.Data.AIProviderDB do
   end
 
   def create(user_id, attrs) do
+    provider_name = Map.get(attrs, "name", "<unknown>")
+
     sql = """
     INSERT INTO ai_providers (name, endpoint, auth_token, user_id)
     VALUES ($(name), $(endpoint), $(auth_token), $(user_id))
@@ -49,14 +51,20 @@ defmodule Pantheon.Data.AIProviderDB do
         {:ok, provider}
 
       [] ->
-        {:error, :not_found}
+        {:error, "Could not create AI provider '#{provider_name}'. Insert returned no data."}
 
-      {:error, :db_error} ->
-        if unique_violation?(sql, params) do
-          {:error, :duplicate_name}
-        else
-          {:error, :db_error}
-        end
+      {:error, {:db_error, reason}} ->
+        msg = "Could not create AI provider '#{provider_name}'. Database error: #{reason}"
+        Logger.error(msg)
+        {:error, msg}
+
+      {:error, {:validation_error, reason}} ->
+        Logger.error(
+          "Creating AI provider '#{provider_name}' failed schema validation on returned data: #{inspect(reason)}"
+        )
+
+        {:error,
+         "Could not create AI provider '#{provider_name}'. Returned data failed validation."}
     end
   end
 
@@ -73,9 +81,24 @@ defmodule Pantheon.Data.AIProviderDB do
     params = Map.merge(attrs, %{"id" => provider_id})
 
     case DbHelpers.run_sql(sql, params, schema()) do
-      [provider | _] -> {:ok, provider}
-      [] -> {:error, :not_found}
-      err -> err
+      [provider | _] ->
+        {:ok, provider}
+
+      [] ->
+        {:error,
+         "Could not update AI provider #{inspect(provider_id)}. No provider found with that ID."}
+
+      {:error, {:db_error, reason}} ->
+        msg = "Could not update AI provider #{inspect(provider_id)}. Database error: #{reason}"
+        Logger.error(msg)
+        {:error, msg}
+
+      {:error, {:validation_error, reason}} ->
+        Logger.error(
+          "Updating AI provider #{inspect(provider_id)} failed schema validation on returned data: #{inspect(reason)}"
+        )
+
+        {:error, "Could not update AI provider. Returned data failed validation."}
     end
   end
 
@@ -83,8 +106,13 @@ defmodule Pantheon.Data.AIProviderDB do
     sql = "DELETE FROM ai_providers WHERE id = $(id)"
 
     case DbHelpers.run_sql(sql, %{"id" => provider_id}) do
-      [] -> :ok
-      {:error, reason} -> {:error, reason}
+      [] ->
+        :ok
+
+      {:error, {:db_error, reason}} ->
+        msg = "Could not delete AI provider #{inspect(provider_id)}. Database error: #{reason}"
+        Logger.error(msg)
+        {:error, msg}
     end
   end
 
@@ -99,12 +127,8 @@ defmodule Pantheon.Data.AIProviderDB do
         results
 
       {:error, reason} ->
-        Logger.error("Failed to load all ai_providers for cache: #{inspect(reason)}")
+        Logger.error("Could not load AI providers into cache on startup: #{inspect(reason)}")
         []
     end
-  end
-
-  defp unique_violation?(_sql, _params) do
-    false
   end
 end

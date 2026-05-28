@@ -56,13 +56,30 @@ defmodule PantheonWeb.Router do
   end
 
   defp require_authenticated_user(conn, _opts) do
-    if get_session(conn, "current_user_id") do
-      conn
-    else
-      conn
-      |> Phoenix.Controller.put_flash(:error, "You must be logged in to access this page.")
-      |> Phoenix.Controller.redirect(to: "/auth/login?return_to=#{conn.request_path}")
-      |> halt()
+    user_id = get_session(conn, "current_user_id")
+
+    case user_id do
+      nil ->
+        conn
+        |> Phoenix.Controller.put_flash(:error, "You must be logged in to access this page.")
+        |> Phoenix.Controller.redirect(to: "/auth/login?return_to=#{conn.request_path}")
+        |> halt()
+
+      _ ->
+        case Pantheon.Data.UserDB.get_by_id(user_id) do
+          {:ok, _user} ->
+            conn
+
+          {:error, _reason} ->
+            conn
+            |> clear_session()
+            |> Phoenix.Controller.put_flash(
+              :error,
+              "Your session has expired. Please log in again."
+            )
+            |> Phoenix.Controller.redirect(to: "/auth/login?return_to=#{conn.request_path}")
+            |> halt()
+        end
     end
   end
 end

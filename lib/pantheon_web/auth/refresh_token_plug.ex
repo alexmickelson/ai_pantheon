@@ -63,11 +63,17 @@ defmodule PantheonWeb.Plugs.RefreshToken do
           |> put_session("refresh_token", new_refresh_token)
 
         {:error, reason} ->
-          Logger.warning("OIDC token refresh failed, clearing session reason=#{inspect(reason)}")
+          Logger.warning(
+            "Could not silently refresh OIDC access token on page request, dropping session: #{inspect(reason)}"
+          )
+
           drop_session(conn)
       end
     else
-      Logger.info("Access token expired with no refresh token, clearing session")
+      Logger.info(
+        "Access token expired on page request with no refresh token available, dropping session"
+      )
+
       drop_session(conn)
     end
   end

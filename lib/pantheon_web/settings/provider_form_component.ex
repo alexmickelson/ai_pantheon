@@ -1,5 +1,6 @@
 defmodule PantheonWeb.Settings.ProviderFormComponent do
   use PantheonWeb, :live_component
+  require Logger
 
   alias Pantheon.AIProviders
 
@@ -40,8 +41,8 @@ defmodule PantheonWeb.Settings.ProviderFormComponent do
             {:noreply,
              assign(socket, errors: %{name: ["A provider with that name already exists"]})}
 
-          {:error, reason} ->
-            {:noreply, assign(socket, errors: %{__all__: [inspect(reason)]})}
+          {:error, msg} when is_binary(msg) ->
+            {:noreply, assign(socket, errors: %{__all__: [msg]})}
         end
     end
   end
@@ -57,11 +58,20 @@ defmodule PantheonWeb.Settings.ProviderFormComponent do
     case AIProviders.update(provider.id, auth_token) do
       {:ok, _provider} ->
         send(self(), :edit_succeeded)
-        {:noreply, socket}
+        {:noreply, assign(socket, errors: %{})}
+
+      {:error, msg} when is_binary(msg) ->
+        {:noreply, assign(socket, errors: %{__all__: [msg]})}
 
       {:error, reason} ->
-        send(self(), {:form_error, %{__all__: [inspect(reason)]}})
-        {:noreply, socket}
+        Logger.error(
+          "Unexpected error response from AI providers service while editing form: #{inspect(reason)}"
+        )
+
+        {:noreply,
+         assign(socket,
+           errors: %{__all__: ["An unexpected error occurred while updating the provider."]}
+         )}
     end
   end
 
@@ -94,7 +104,6 @@ defmodule PantheonWeb.Settings.ProviderFormComponent do
   attr :id, :string, required: true
   attr :user_id, :integer, required: true
   attr :provider, :any, default: nil
-  attr :rest, :global, include: ~w(phx-update)
 
   def render(assigns) do
     assigns = assign(assigns, :editing, !is_nil(assigns.provider))
@@ -125,24 +134,33 @@ defmodule PantheonWeb.Settings.ProviderFormComponent do
                 id={"#{@id}-name"}
                 value={@form.name}
                 placeholder="My API Provider"
-                class={["w-full input", Map.get(@errors, :name, []) != [] && "input-error"]}
+                class={["w-full input border", Map.get(@errors, :name, []) != [] && "border-red-400"]}
               />
-              <p :for={msg <- Map.get(@errors, :name, [])} class="mt-1.5 text-sm text-error">
+              <p
+                :for={msg <- Map.get(@errors, :name, [])}
+                class="mt-1.5 text-xs text-red-100 bg-red-900 rounded px-2 py-1"
+              >
                 {msg}
               </p>
             </div>
 
             <div>
-              <label for={"#{@id}-endpoint"} class="block text-sm font-medium mb-1">Endpoint</label>
+              <label for={"#{@id}-endpoint"} class="block text-sm font-medium mb-1">OpenAI Compatible Endpoint</label>
               <input
                 type="text"
                 name="ai_provider[endpoint]"
                 id={"#{@id}-endpoint"}
                 value={@form.endpoint}
                 placeholder="https://api.example.com/v1"
-                class={["w-full input", Map.get(@errors, :endpoint, []) != [] && "input-error"]}
+                class={[
+                  "w-full input border",
+                  Map.get(@errors, :endpoint, []) != [] && "border-red-400"
+                ]}
               />
-              <p :for={msg <- Map.get(@errors, :endpoint, [])} class="mt-1.5 text-sm text-error">
+              <p
+                :for={msg <- Map.get(@errors, :endpoint, [])}
+                class="mt-1.5 text-xs text-red-100 bg-red-900 rounded px-2 py-1"
+              >
                 {msg}
               </p>
             </div>
@@ -157,16 +175,22 @@ defmodule PantheonWeb.Settings.ProviderFormComponent do
                 id={"#{@id}-auth-token"}
                 value={@form.auth_token}
                 placeholder="sk-..."
-                class={["w-full input", Map.get(@errors, :auth_token, []) != [] && "input-error"]}
+                class={[
+                  "w-full input border",
+                  Map.get(@errors, :auth_token, []) != [] && "border-red-400"
+                ]}
               />
-              <p :for={msg <- Map.get(@errors, :auth_token, [])} class="mt-1.5 text-sm text-error">
+              <p
+                :for={msg <- Map.get(@errors, :auth_token, [])}
+                class="mt-1.5 text-xs text-red-100 bg-red-900 rounded px-2 py-1"
+              >
                 {msg}
               </p>
             </div>
           </div>
 
           <%= for msg <- Map.get(@errors, :__all__, []) do %>
-            <p class="text-sm text-error mt-2">{msg}</p>
+            <p class="text-xs text-red-100 bg-red-900 rounded px-2 py-1 mt-2">{msg}</p>
           <% end %>
 
           <div class="flex gap-2 mt-4">

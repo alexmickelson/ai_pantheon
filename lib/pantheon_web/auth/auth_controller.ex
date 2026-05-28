@@ -9,7 +9,7 @@ defmodule PantheonWeb.AuthController do
       super(conn, action)
     rescue
       e in Oidcc.Plug.Authorize.Error ->
-        Logger.error("OIDC authorize failed reason=#{inspect(e.reason)}")
+        Logger.error("OIDC authorization handshake rejected during login: #{inspect(e.reason)}")
 
         conn
         |> put_flash(:error, "Login unavailable: #{inspect(e.reason)}")
@@ -94,7 +94,9 @@ defmodule PantheonWeb.AuthController do
         |> redirect(to: return_to)
 
       {:error, reason} ->
-        Logger.error("Failed to find_or_create user email=#{email} reason=#{inspect(reason)}")
+        Logger.error(
+          "Could not find or create user account in database for email #{inspect(email)} during OIDC callback: #{inspect(reason)}"
+        )
 
         conn
         |> put_flash(:error, "Login failed: could not load user profile")
@@ -106,7 +108,7 @@ defmodule PantheonWeb.AuthController do
         %Plug.Conn{private: %{Oidcc.Plug.AuthorizationCallback => {:error, reason}}} = conn,
         _params
       ) do
-    Logger.warning("User login failed reason=#{inspect(reason)}")
+    Logger.warning("OIDC provider returned an error during login callback: #{inspect(reason)}")
 
     conn
     |> put_status(400)
@@ -141,7 +143,9 @@ defmodule PantheonWeb.AuthController do
           %Oidcc.Token.Refresh{token: rt} -> rt
         end
 
-      Logger.info("auth_controller.refresh success sub=#{sub} new_exp=#{new_exp}")
+      Logger.info(
+        "Access token successfully refreshed via session refresh endpoint for user #{inspect(sub)}"
+      )
 
       conn
       |> put_session("session_expires_at", new_exp)
@@ -150,12 +154,15 @@ defmodule PantheonWeb.AuthController do
       |> json(%{exp: new_exp})
     else
       false ->
-        Logger.warning("auth_controller.refresh missing refresh_token or sub, returning 401")
+        Logger.warning(
+          "Session refresh endpoint called without valid refresh token or user ID, returning 401"
+        )
+
         send_resp(conn, 401, "")
 
       {:error, reason} ->
         Logger.error(
-          "auth_controller.refresh OIDC error sub=#{inspect(sub)} reason=#{inspect(reason)}"
+          "Could not refresh OIDC access token via session endpoint for user #{inspect(sub)}: #{inspect(reason)}"
         )
 
         send_resp(conn, 401, "")

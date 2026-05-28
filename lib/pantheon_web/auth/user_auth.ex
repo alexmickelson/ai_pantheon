@@ -59,12 +59,15 @@ defmodule PantheonWeb.UserAuth do
               {:ok, user}
 
             {:error, :not_found} ->
-              Logger.warning("User not found in DB for id=#{inspect(user_id)}, clearing session")
+              Logger.warning(
+                "User #{inspect(user_id)} referenced in session was not found in database, clearing session"
+              )
+
               :error
 
             {:error, reason} ->
               Logger.error(
-                "Failed to fetch user id=#{inspect(user_id)} reason=#{inspect(reason)}"
+                "Could not load user #{inspect(user_id)} from database to validate active session: #{inspect(reason)}"
               )
 
               :error
@@ -104,7 +107,10 @@ defmodule PantheonWeb.UserAuth do
         {:halt, socket}
 
       "session_refreshed", params, socket ->
-        Logger.warning("session_refreshed received unexpected params=#{inspect(params)}")
+        Logger.warning(
+          "Received session refresh event from browser with unexpected payload: #{inspect(params)}"
+        )
+
         {:halt, socket}
 
       _event, _params, socket ->

@@ -13,7 +13,20 @@ defmodule Pantheon.Application do
         [
           PantheonWeb.Telemetry,
           {DNSCluster, query: Application.get_env(:pantheon, :dns_cluster_query) || :ignore},
-          {Phoenix.PubSub, name: Pantheon.PubSub}
+          {Phoenix.PubSub, name: Pantheon.PubSub},
+          {
+            Registry,
+            keys: :unique, name: Pantheon.AiProxy.WorkerRegistry
+          },
+          {
+            DynamicSupervisor,
+            name: Pantheon.AiProxy.WorkersSupervisor,
+            strategy: :one_for_one,
+            max_restarts: 1000,
+            max_seconds: 3600
+          },
+          Pantheon.AiProxy.PoolManager,
+          Pantheon.AiProxy.Router
         ] ++ oidc_children() ++ [PantheonWeb.Endpoint]
 
     opts = [strategy: :one_for_one, name: Pantheon.Supervisor]
@@ -37,7 +50,7 @@ defmodule Pantheon.Application do
 
   defp databaseChildren() do
     case Application.fetch_env(:pantheon, :ecto_repos) do
-      {:ok, [_repo | _]} -> [Pantheon.AIProviders]
+      {:ok, [_repo | _]} -> [Pantheon.AIProviders, Pantheon.UserApiKeys]
       _ -> []
     end
   end

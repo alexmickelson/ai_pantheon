@@ -14,8 +14,20 @@ defmodule PantheonWeb.Router do
     plug :accepts, ["json"]
   end
 
+  pipeline :proxy_api do
+    plug PantheonWeb.Proxy.AuthPlug
+    plug :accepts, ["json"]
+  end
+
   pipeline :require_authenticated do
     plug :require_authenticated_user
+  end
+
+  scope "/v1", PantheonWeb.Proxy do
+    pipe_through :proxy_api
+
+    get "/models", V1Controller, :list_models
+    post "/chat/completions", V1Controller, :create_completion
   end
 
   scope "/", PantheonWeb do

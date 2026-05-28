@@ -17,7 +17,7 @@ defmodule Pantheon.Data.DbHelpers do
 
       Enum.map(result.rows || [], fn row ->
         Enum.zip(result.columns, row)
-        |> Enum.map(fn {col, val} -> {col, format_db_value(col, val)} end)
+        |> Enum.map(fn {col, val} -> {col, format_uuid_binary(val)} end)
         |> Enum.into(%{})
       end)
     rescue
@@ -60,18 +60,14 @@ defmodule Pantheon.Data.DbHelpers do
 
   defp parse_uuid_string_to_binary(val), do: val
 
-  @datetime_columns ~w(inserted_at updated_at)a
+  @doc """
+  Converts raw PostgreSQL datetime tuples to DateTime structs.
+  Returns nil for nil input. Safe to call on any value.
+  """
+  def convert_datetime(nil), do: nil
 
-  defp format_db_value(col, val) when col in @datetime_columns do
-    convert_datetime(val)
-  end
-
-  defp format_db_value(_col, val) do
-    format_uuid_binary(val)
-  end
-
-  defp convert_datetime({{{y, m, d}, {h, min, s, us}}, {_timezone, offset_min, _tz}})
-       when is_integer(us) do
+  def convert_datetime({{{y, m, d}, {h, min, s, us}}, {_timezone, offset_min, _tz}})
+      when is_integer(us) do
     microsecond = rem(us, 1_000_000)
 
     %NaiveDateTime{
@@ -88,11 +84,9 @@ defmodule Pantheon.Data.DbHelpers do
     _ -> convert_datetime_fallback(y, m, d, h, min, s, us)
   end
 
-  defp convert_datetime({{{y, m, d}, {h, min, s}}, _}) when is_integer(s) do
+  def convert_datetime({{{y, m, d}, {h, min, s}}, _}) when is_integer(s) do
     convert_datetime_fallback(y, m, d, h, min, s, 0)
   end
-
-  defp convert_datetime(val), do: val
 
   defp convert_datetime_fallback(y, m, d, h, min, s, us) do
     %NaiveDateTime{
@@ -115,13 +109,41 @@ defmodule Pantheon.Data.DbHelpers do
     end
   end
 
-  defp format_uuid_binary(<<a::4-bytes, b::2-bytes, c::2-bytes, d::2-bytes, e::6-bytes>>) do
+  @doc """
+  Converts raw PostgreSQL UUID binaries to hyphenated UUID strings.
+  Returns the value unchanged if it's not a UUID binary.
+  """
+  def format_uuid_binary(val) when not is_binary(val), do: val
+  def format_uuid_binary(val) when byte_size(val) != 16, do: val
+
+  def format_uuid_binary(<<a::4-bytes, b::2-bytes, c::2-bytes, d::2-bytes, e::6-bytes>>) do
     [a, b, c, d, e]
     |> Enum.map(&Base.encode16(&1, case: :lower))
     |> Enum.join("-")
   end
 
-  defp format_uuid_binary(val), do: val
+  @doc """
+  Applies datetime conversion to specific columns in a list of row maps.
+  Call this after run_sql when your query returns datetime columns.
+
+      DbHelpers.run_sql(sql, params)
+      |> DbHelpers.rows_apply_datetime_conversion([:inserted_at, :updated_at])
+
+  Columns with nil values are left as nil (safe for nullable datetimes).
+  Passes through {:error, ...} tuples unchanged.
+  """
+  def rows_apply_datetime_conversion({:error, _} = err, _datetime_columns), do: err
+
+  def rows_apply_datetime_conversion(rows, datetime_columns) when is_list(datetime_columns) do
+    Enum.map(rows, fn row ->
+      Enum.reduce(datetime_columns, row, fn col, acc ->
+        case Map.fetch(acc, col) do
+          {:ok, val} -> Map.put(acc, col, convert_datetime(val))
+          :error -> acc
+        end
+      end)
+    end)
+  end
 
   def transaction(fun) when is_function(fun, 0) do
     Pantheon.Repo.transaction(fn ->
@@ -153,9 +175,14 @@ defmodule Pantheon.Data.DbHelpers do
     end
   end
 
-  defp validate_rows({:error, reason}, _schema), do: {:error, reason}
+  @doc """
+  Validates a list of row maps against a Zoi schema.
+  Returns {:ok, validated_rows} or {:error, reason}.
+  Passes through {:error, reason} tuples unchanged.
+  """
+  def validate_rows({:error, reason}, _schema), do: {:error, reason}
 
-  defp validate_rows(rows, schema) do
+  def validate_rows(rows, schema) do
     Enum.reduce_while(rows, {:ok, []}, fn row, {:ok, acc} ->
       case Zoi.parse(schema, row, coerce: true) do
         {:ok, valid} ->

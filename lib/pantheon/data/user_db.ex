@@ -2,6 +2,8 @@ defmodule Pantheon.Data.UserDB do
   require Logger
   alias Pantheon.Data.DbHelpers
 
+  @datetime_columns [:inserted_at, :updated_at]
+
   def schema do
     Zoi.object(%{
       id: Zoi.uuid(),
@@ -19,7 +21,9 @@ defmodule Pantheon.Data.UserDB do
     RETURNING id, email, inserted_at, updated_at
     """
 
-    case DbHelpers.run_sql(sql, %{"email" => email}, schema()) do
+    case DbHelpers.run_sql(sql, %{"email" => email})
+         |> DbHelpers.rows_apply_datetime_conversion(@datetime_columns)
+         |> DbHelpers.validate_rows(schema()) do
       {:error, reason} -> {:error, reason}
       [] -> {:error, :not_found}
       [user | _] -> {:ok, user}
@@ -33,7 +37,9 @@ defmodule Pantheon.Data.UserDB do
     WHERE id = $(user_id)
     """
 
-    case DbHelpers.run_sql(sql, %{"user_id" => user_id}, schema()) do
+    case DbHelpers.run_sql(sql, %{"user_id" => user_id})
+         |> DbHelpers.rows_apply_datetime_conversion(@datetime_columns)
+         |> DbHelpers.validate_rows(schema()) do
       [user | _] -> {:ok, user}
       [] -> {:error, :not_found}
       {:error, reason} -> {:error, reason}

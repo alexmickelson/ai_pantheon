@@ -119,6 +119,10 @@ defmodule Pantheon.AIProviders do
     {:noreply, %__MODULE__{state | providers: with_empty_models}}
   end
 
+  def handle_info({_ref, {:db_loaded, providers}}, %__MODULE__{} = state) do
+    handle_info({:db_loaded, providers}, state)
+  end
+
   def handle_info({:DOWN, ref, :process, _pid, :normal}, %__MODULE__{} = state) do
     {:noreply,
      %__MODULE__{state | pending_model_fetches: Map.delete(state.pending_model_fetches, ref)}}
@@ -159,6 +163,10 @@ defmodule Pantheon.AIProviders do
         broadcast(:provider_updated, updated)
         {:noreply, new_state}
     end
+  end
+
+  def handle_info({_ref, {:models_fetched, provider_id, models}}, %__MODULE__{} = state) do
+    handle_info({:models_fetched, provider_id, models}, state)
   end
 
   def handle_info(msg, %__MODULE__{} = state) do

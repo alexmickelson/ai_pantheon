@@ -2,6 +2,8 @@ defmodule Pantheon.Data.AIProviderDB do
   require Logger
   alias Pantheon.Data.DbHelpers
 
+  @datetime_columns [:inserted_at, :updated_at]
+
   def schema do
     Zoi.object(%{
       id: Zoi.uuid(),
@@ -20,7 +22,9 @@ defmodule Pantheon.Data.AIProviderDB do
     ORDER BY name ASC
     """
 
-    case DbHelpers.run_sql(sql, %{}, schema()) do
+    case DbHelpers.run_sql(sql, %{})
+         |> DbHelpers.rows_apply_datetime_conversion(@datetime_columns)
+         |> DbHelpers.validate_rows(schema()) do
       results when is_list(results) ->
         results
 
@@ -44,7 +48,9 @@ defmodule Pantheon.Data.AIProviderDB do
       "auth_token" => auth_token
     }
 
-    case DbHelpers.run_sql(sql, params, schema()) do
+    case DbHelpers.run_sql(sql, params)
+         |> DbHelpers.rows_apply_datetime_conversion(@datetime_columns)
+         |> DbHelpers.validate_rows(schema()) do
       [provider | _] ->
         {:ok, provider}
 
@@ -82,7 +88,9 @@ defmodule Pantheon.Data.AIProviderDB do
       "auth_token" => auth_token
     }
 
-    case DbHelpers.run_sql(sql, params, schema()) do
+    case DbHelpers.run_sql(sql, params)
+         |> DbHelpers.rows_apply_datetime_conversion(@datetime_columns)
+         |> DbHelpers.validate_rows(schema()) do
       [provider | _] ->
         {:ok, provider}
 
@@ -124,7 +132,9 @@ defmodule Pantheon.Data.AIProviderDB do
     FROM ai_providers
     """
 
-    case DbHelpers.run_sql(sql, %{}, schema()) do
+    case DbHelpers.run_sql(sql, %{})
+         |> DbHelpers.rows_apply_datetime_conversion(@datetime_columns)
+         |> DbHelpers.validate_rows(schema()) do
       results when is_list(results) ->
         results
 

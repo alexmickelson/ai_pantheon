@@ -27,7 +27,9 @@ when checking if changes compile use `mix precommit` on the terminal (not in con
 
 make sure that all error messages are unique so they can be searched and include enough information to reproduce the situation. do not include exact function names in error messages, describe the situation
 
-use pattern matching on function parameters to enforce requried structure
+use pattern matching on function parameters to enforce required structure
+
+make plans when making large changes. when making plans, ask questions to the user when there are ambiguous requirements that need clarification
 
 
 ---

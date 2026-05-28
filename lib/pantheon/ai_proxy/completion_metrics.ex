@@ -8,6 +8,7 @@ defmodule Pantheon.AiProxy.CompletionMetrics do
 
   @type t :: %__MODULE__{
           user_id: binary() | nil,
+          api_key_id: binary() | nil,
           provider_id: binary(),
           model: String.t(),
           status_code: integer(),
@@ -35,6 +36,7 @@ defmodule Pantheon.AiProxy.CompletionMetrics do
         }
 
   defstruct user_id: nil,
+            api_key_id: nil,
             provider_id: nil,
             model: nil,
             status_code: nil,
@@ -67,6 +69,7 @@ defmodule Pantheon.AiProxy.CompletionMetrics do
   @spec from_stream(
           binary() | nil,
           binary() | nil,
+          binary() | nil,
           String.t(),
           integer(),
           integer(),
@@ -75,6 +78,7 @@ defmodule Pantheon.AiProxy.CompletionMetrics do
 
   def from_stream(
         user_id,
+        api_key_id,
         provider_id,
         model,
         status_code,
@@ -87,6 +91,7 @@ defmodule Pantheon.AiProxy.CompletionMetrics do
 
     base = %__MODULE__{
       user_id: user_id,
+      api_key_id: api_key_id,
       provider_id: provider_id,
       model: model,
       status_code: status_code,
@@ -101,15 +106,17 @@ defmodule Pantheon.AiProxy.CompletionMetrics do
   @spec from_error(
           binary() | nil,
           binary() | nil,
+          binary() | nil,
           String.t(),
           integer() | nil,
           integer() | float() | {integer(), integer(), integer()},
           String.t()
         ) :: t()
 
-  def from_error(user_id, provider_id, model, status_code, elapsed_ms, error_message) do
+  def from_error(user_id, api_key_id, provider_id, model, status_code, elapsed_ms, error_message) do
     %__MODULE__{
       user_id: user_id,
+      api_key_id: api_key_id,
       provider_id: provider_id,
       model: model,
       status_code: status_code || 0,

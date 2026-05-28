@@ -27,8 +27,10 @@ defmodule PantheonWeb.Proxy.AuthPlug do
 
   defp validate(conn, key) do
     case Pantheon.UserApiKeys.validate_key(key) do
-      {:ok, user_id} ->
-        assign(conn, :current_api_key_user_id, user_id)
+      {:ok, %{user_id: user_id, api_key_id: api_key_id}} ->
+        conn
+        |> assign(:current_api_key_user_id, user_id)
+        |> assign(:current_api_key_id, api_key_id)
 
       {:error, :key_expired} ->
         unauthorized(conn, "API key has expired")

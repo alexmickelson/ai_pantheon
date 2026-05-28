@@ -104,6 +104,8 @@ defmodule Pantheon.Data.UserApiKeyDB do
     end
   end
 
+  @spec validate_key(String.t()) ::
+          {:ok, %{user_id: binary(), api_key_id: binary()}} | {:error, atom()}
   def validate_key(key_string) do
     key_hash = :crypto.hash(:sha256, key_string) |> Base.encode16(case: :lower)
 
@@ -126,7 +128,7 @@ defmodule Pantheon.Data.UserApiKeyDB do
 
           false ->
             touch_last_used(key_id)
-            {:ok, user_id}
+            {:ok, %{user_id: user_id, api_key_id: key_id}}
         end
 
       {:error, _reason} ->

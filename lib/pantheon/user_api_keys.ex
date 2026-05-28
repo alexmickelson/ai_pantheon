@@ -27,7 +27,8 @@ defmodule Pantheon.UserApiKeys do
     GenServer.call(__MODULE__, {:delete, key_id, user_id})
   end
 
-  @spec validate_key(String.t()) :: {:ok, String.t()} | {:error, atom()}
+  @spec validate_key(String.t()) ::
+          {:ok, %{user_id: binary(), api_key_id: binary()}} | {:error, atom()}
   def validate_key(key_string) do
     UserApiKeyDB.validate_key(key_string)
   end

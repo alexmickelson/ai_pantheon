@@ -56,10 +56,12 @@ CREATE TABLE IF NOT EXISTS completion_metrics (
   response_latency_ms DOUBLE PRECISION NOT NULL,
   error_message TEXT,
 
-  inserted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  inserted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  api_key_id UUID REFERENCES user_api_keys(id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_completion_metrics_provider ON completion_metrics(provider_id);
 CREATE INDEX IF NOT EXISTS idx_completion_metrics_user ON completion_metrics(user_id);
 CREATE INDEX IF NOT EXISTS idx_completion_metrics_model ON completion_metrics(model);
 CREATE INDEX IF NOT EXISTS idx_completion_metrics_created ON completion_metrics(inserted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_completion_metrics_api_key ON completion_metrics(api_key_id);

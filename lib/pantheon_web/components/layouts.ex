@@ -37,12 +37,44 @@ defmodule PantheonWeb.Layouts do
     ~H"""
     <header class="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-3 border-b border-slate-800">
       <div class="flex-1">
-        <.link
-          navigate="/"
-          class="flex items-center gap-2 text-sm font-semibold hover:opacity-80 transition"
-        >
-          Pantheon
-        </.link>
+        <nav class="flex items-center gap-4">
+          <.link
+            navigate="/"
+            class="text-sm font-semibold hover:opacity-80 transition"
+          >
+            Pantheon
+          </.link>
+          <ul class="flex items-center gap-1">
+            <li>
+              <.link
+                navigate="/"
+                class={[
+                  "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
+                  if(@current_scope,
+                    do: "text-slate-400 hover:text-white hover:bg-slate-800",
+                    else: "opacity-50 pointer-events-none"
+                  )
+                ]}
+              >
+                Settings
+              </.link>
+            </li>
+            <li>
+              <.link
+                navigate="/metrics"
+                class={[
+                  "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
+                  if(@current_scope,
+                    do: "text-slate-400 hover:text-white hover:bg-slate-800",
+                    else: "opacity-50 pointer-events-none"
+                  )
+                ]}
+              >
+                Metrics
+              </.link>
+            </li>
+          </ul>
+        </nav>
       </div>
       <div class="flex-none">
         <ul class="flex items-center gap-4">

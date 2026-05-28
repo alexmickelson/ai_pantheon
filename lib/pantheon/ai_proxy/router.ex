@@ -5,6 +5,7 @@ defmodule Pantheon.AiProxy.Router do
 
   @type request_data :: %{
           user_id: binary() | nil,
+          api_key_id: binary() | nil,
           provider: map(),
           path: String.t(),
           body: map()

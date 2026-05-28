@@ -86,6 +86,7 @@ defmodule PantheonWeb.Proxy.V1Controller do
   defp stream_loop(conn, provider, body_params) do
     request_data = %{
       user_id: conn.assigns.current_api_key_user_id,
+      api_key_id: conn.assigns.current_api_key_id,
       provider: %{
         id: provider.id,
         endpoint: provider.endpoint,

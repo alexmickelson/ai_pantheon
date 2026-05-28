@@ -7,6 +7,7 @@ defmodule Pantheon.AiProxy.RequestWorker do
 
   @type request_data :: %{
           user_id: binary() | nil,
+          api_key_id: binary() | nil,
           provider: map(),
           path: String.t(),
           body: map()
@@ -14,7 +15,8 @@ defmodule Pantheon.AiProxy.RequestWorker do
 
   @spec run(request_data(), pid()) :: :ok
   def run(
-        %{user_id: user_id, provider: provider, path: path, body: body} = _request_data,
+        %{user_id: user_id, api_key_id: api_key_id, provider: provider, path: path, body: body} =
+          _request_data,
         client_pid
       ) do
     start_time = System.monotonic_time(:millisecond)
@@ -39,6 +41,7 @@ defmodule Pantheon.AiProxy.RequestWorker do
         metrics =
           CompletionMetrics.from_stream(
             user_id,
+            api_key_id,
             Map.get(provider, :id),
             model,
             200,
@@ -59,6 +62,7 @@ defmodule Pantheon.AiProxy.RequestWorker do
         metrics =
           CompletionMetrics.from_error(
             user_id,
+            api_key_id,
             Map.get(provider, :id),
             model,
             status,
@@ -77,6 +81,7 @@ defmodule Pantheon.AiProxy.RequestWorker do
         metrics =
           CompletionMetrics.from_error(
             user_id,
+            api_key_id,
             Map.get(provider, :id),
             model,
             nil,

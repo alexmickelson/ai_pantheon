@@ -40,12 +40,6 @@ if config_env() != :test do
   end
 end
 
-config :pantheon, :ai_proxy_pool,
-  min_workers: String.to_integer(System.get_env("PROXY_MIN_WORKERS", "2")),
-  max_workers: String.to_integer(System.get_env("PROXY_MAX_WORKERS", "50")),
-  scale_up_batch: String.to_integer(System.get_env("PROXY_SCALE_UP_BATCH", "3")),
-  worker_idle_timeout: String.to_integer(System.get_env("PROXY_WORKER_IDLE_TIMEOUT_MS", "60000"))
-
 config :pantheon, PantheonWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 

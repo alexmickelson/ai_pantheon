@@ -27,3 +27,39 @@ CREATE TABLE IF NOT EXISTS user_api_keys (
 
 CREATE INDEX IF NOT EXISTS idx_user_api_keys_user_id ON user_api_keys(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_api_keys_key_hash ON user_api_keys(key_hash);
+
+CREATE TABLE IF NOT EXISTS completion_metrics (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id),
+  provider_id UUID NOT NULL REFERENCES ai_providers(id),
+  model TEXT NOT NULL,
+  status_code INTEGER NOT NULL,
+
+  -- usage
+  prompt_tokens INTEGER,
+  completion_tokens INTEGER,
+  total_tokens INTEGER,
+  cached_tokens INTEGER DEFAULT 0,
+
+  -- timings (provider-reported, NULL for non-llama.cpp providers)
+  prompt_ms DOUBLE PRECISION,
+  predicted_ms DOUBLE PRECISION,
+  prompt_per_token_ms DOUBLE PRECISION,
+  predicted_per_token_ms DOUBLE PRECISION,
+  prompt_per_second DOUBLE PRECISION,
+  predicted_per_second DOUBLE PRECISION,
+  cache_n INTEGER,
+  draft_n INTEGER,
+  draft_n_accepted INTEGER,
+
+  -- proxy-side
+  response_latency_ms DOUBLE PRECISION NOT NULL,
+  error_message TEXT,
+
+  inserted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_completion_metrics_provider ON completion_metrics(provider_id);
+CREATE INDEX IF NOT EXISTS idx_completion_metrics_user ON completion_metrics(user_id);
+CREATE INDEX IF NOT EXISTS idx_completion_metrics_model ON completion_metrics(model);
+CREATE INDEX IF NOT EXISTS idx_completion_metrics_created ON completion_metrics(inserted_at DESC);

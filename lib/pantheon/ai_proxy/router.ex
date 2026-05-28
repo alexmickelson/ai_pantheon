@@ -1,78 +1,86 @@
 defmodule Pantheon.AiProxy.Router do
   use GenServer
-  require Logger
 
-  defstruct [
-    :queue,
-    queue_size: 0
-  ]
+  defstruct active_refs: MapSet.new()
+
+  @type request_data :: %{
+          user_id: binary() | nil,
+          provider: map(),
+          path: String.t(),
+          body: map()
+        }
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(_opts \\ []) do
     GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
   end
 
-  @type request_data :: %{
-          provider: map(),
-          path: String.t(),
-          body: map()
-        }
-
-  @spec dispatch(request_data(), pid()) :: :ok | {:error, :no_capacity}
+  @spec dispatch(request_data(), pid()) :: :ok
   def dispatch(request_data, client_pid) do
     GenServer.call(__MODULE__, {:dispatch, request_data, client_pid})
   end
 
+  @spec spawn_worker(request_data(), pid()) :: :ok
+  def spawn_worker(request_data, client_pid) do
+    GenServer.call(__MODULE__, {:spawn_worker, request_data, client_pid})
+  end
+
+  @spec in_flight_count() :: non_neg_integer()
+  def in_flight_count() do
+    GenServer.call(__MODULE__, :in_flight_count)
+  end
+
+  @spec recent_completions(pos_integer()) :: [%{}]
+  def recent_completions(limit \\ 100) do
+    Pantheon.Data.CompletionMetricsDB.list_recent(limit)
+  end
+
+  @spec stats(non_neg_integer()) :: [%{}]
+  def stats(hours \\ 24) do
+    Pantheon.Data.CompletionMetricsDB.aggregate_by_provider(hours)
+  end
+
   @impl true
   def init(_opts) do
-    {:ok, %__MODULE__{queue: :queue.new()}}
+    {:ok, %__MODULE__{}}
   end
 
   @impl true
-  def handle_call({:dispatch, request_data, client_pid}, _from, %__MODULE__{} = state) do
-    case Pantheon.AiProxy.PoolManager.request_worker() do
-      pid when is_pid(pid) ->
-        Pantheon.AiProxy.Worker.handle_request(pid, request_data, client_pid)
-        {:reply, :ok, state}
+  def handle_call({:dispatch, request_data, client_pid}, _from, state) do
+    new_state = spawn_task(request_data, client_pid, state)
+    {:reply, :ok, new_state}
+  end
 
-      nil ->
-        if state.queue_size >= 100 do
-          send(client_pid, {:proxy_stream_init, 503})
+  def handle_call({:spawn_worker, request_data, client_pid}, _from, state) do
+    new_state = spawn_task(request_data, client_pid, state)
+    {:reply, :ok, new_state}
+  end
 
-          error_json =
-            Jason.encode!(%{
-              error: %{message: "Too many requests — proxy pool at capacity", type: "rate_limit"}
-            })
-
-          send(client_pid, {:proxy_stream_chunk, "data: #{error_json}\n\n"})
-          send(client_pid, {:proxy_stream_done})
-          {:reply, {:error, :no_capacity}, state}
-        else
-          new_queue = :queue.in({request_data, client_pid}, state.queue)
-          GenServer.cast(__MODULE__, :process_queue)
-          {:reply, :ok, %{state | queue: new_queue, queue_size: state.queue_size + 1}}
-        end
-    end
+  def handle_call(:in_flight_count, _from, state) do
+    count = MapSet.size(state.active_refs)
+    {:reply, count, state}
   end
 
   @impl true
-  def handle_cast(:process_queue, %__MODULE__{queue: queue} = state) do
-    case :queue.out(queue) do
-      {:empty, _rest} ->
-        {:noreply, %{state | queue_size: 0}}
+  def handle_info({:DOWN, ref, :process, _pid, _reason}, %__MODULE__{} = state) do
+    new_state = %{state | active_refs: MapSet.delete(state.active_refs, ref)}
+    {:noreply, new_state}
+  end
 
-      {{:value, {request_data, client_pid}}, rest} ->
-        case Pantheon.AiProxy.PoolManager.request_worker() do
-          pid when is_pid(pid) ->
-            Pantheon.AiProxy.Worker.handle_request(pid, request_data, client_pid)
-            new_size = :queue.len(rest)
-            {:noreply, %{state | queue: rest, queue_size: new_size}}
+  def handle_info({ref, _result}, %__MODULE__{} = state) when is_reference(ref) do
+    # async_nolink sends {ref, result} on completion; we track lifecycle via DOWN only
+    {:noreply, state}
+  end
 
-          nil ->
-            new_queue = :queue.in({request_data, client_pid}, rest)
-            Process.send_after(self(), {:process_queue}, 100)
-            {:noreply, %{state | queue: new_queue}}
-        end
-    end
+  defp spawn_task(request_data, client_pid, state) do
+    task =
+      Task.Supervisor.async_nolink(
+        Pantheon.AiProxy.TaskSupervisor,
+        Pantheon.AiProxy.RequestWorker,
+        :run,
+        [request_data, client_pid]
+      )
+
+    %{state | active_refs: MapSet.put(state.active_refs, task.ref)}
   end
 end

@@ -72,6 +72,7 @@ defmodule PantheonWeb.Proxy.V1Controller do
     end)
   end
 
+  @spec stream_completion(Plug.Conn.t(), map(), map()) :: no_return()
   defp stream_completion(conn, provider, body_params) do
     conn
     |> put_resp_header("content-type", "text/event-stream")
@@ -81,9 +82,12 @@ defmodule PantheonWeb.Proxy.V1Controller do
     |> then(&stream_loop(&1, provider, body_params))
   end
 
+  @spec stream_loop(Plug.Conn.t(), map(), map()) :: no_return()
   defp stream_loop(conn, provider, body_params) do
     request_data = %{
+      user_id: conn.assigns.current_api_key_user_id,
       provider: %{
+        id: provider.id,
         endpoint: provider.endpoint,
         auth_token: provider.auth_token
       },
@@ -98,10 +102,18 @@ defmodule PantheonWeb.Proxy.V1Controller do
         stream_loop(conn)
 
       {:proxy_stream_init, status} when status >= 400 ->
-        conn |> send_resp(status, "")
+        error_json =
+          Jason.encode!(%{error: %{message: "Provider returned #{status}", type: "api_error"}})
+
+        chunk(conn, "data: #{error_json}\n\n")
+        chunk(conn, "data: [DONE]\n\n")
+        conn
 
       {:proxy_stream_init, 503} ->
-        stream_loop(conn)
+        error_json = Jason.encode!(%{error: %{message: "Proxy unavailable", type: "api_error"}})
+        chunk(conn, "data: #{error_json}\n\n")
+        chunk(conn, "data: [DONE]\n\n")
+        conn
     after
       @stream_done_timeout ->
         Logger.warning("Timeout waiting for proxy stream initialization")
@@ -115,6 +127,7 @@ defmodule PantheonWeb.Proxy.V1Controller do
     end
   end
 
+  @spec stream_loop(Plug.Conn.t()) :: no_return()
   defp stream_loop(conn) do
     receive do
       {:proxy_stream_chunk, data} ->

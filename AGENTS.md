@@ -23,11 +23,12 @@ All runtime config is loaded from `.env` (via Dotenvy) merged with system env va
 
 Read application logs with `docker logs ai_pantheon-app-1`
 
-when checking if changes compile use `mix compile` on the terminal (not in container)
+when checking if changes compile use `mix precommit` on the terminal (not in container)
 
 make sure that all error messages are unique so they can be searched and include enough information to reproduce the situation. do not include exact function names in error messages, describe the situation
 
 use pattern matching on function parameters to enforce requried structure
+
 
 ---
 
@@ -49,7 +50,7 @@ use pattern matching on function parameters to enforce requried structure
 
 - **Always use and maintain this import syntax** in the app.css file for projects generated with `phx.new`
 - **Never** write raw css, prefer to inline tailwindcss classes
-- **Always** manually write your own tailwind-based components instead of using daisyUI for a unique, world-class design
+- **Always** manually write your own tailwind-based components for a unique, world-class design
 - Out of the box **only the app.js and app.css bundles are supported**
   - You cannot reference an external vendor'd script `src` or link `href` in the layouts
   - You must import the vendor deps into app.js and app.css to use them

@@ -5,123 +5,179 @@ defmodule PantheonWeb.Settings.ProvidersListComponent do
 
   @impl true
   def update(assigns, socket) do
-    user_id = assigns.user_id
+    dom_id = fn p -> "provider-#{p.id}" end
 
-    if assigns[:initial] != false do
-      AIProviders.subscribe(user_id)
-    end
+    socket =
+      case assigns[:action] do
+        {:insert, provider} ->
+          assign(socket, assigns) |> stream_insert(:providers, provider, dom_id: dom_id)
 
-    providers = AIProviders.list(user_id)
+        {:update, provider} ->
+          assign(socket, assigns) |> stream_insert(:providers, provider, dom_id: dom_id)
 
-    {:ok,
-     socket
-     |> assign(assigns)
-     |> stream(:providers, providers)}
+        {:delete, payload} ->
+          socket
+          |> assign(assigns)
+          |> stream_delete_by_dom_id(:providers, "provider-#{payload.id}")
+
+        :edit_finished ->
+          providers = AIProviders.list()
+
+          socket
+          |> assign(assigns)
+          |> assign(:editing_provider_id, nil)
+          |> put_flash(:info, "Provider updated")
+          |> stream(:providers, providers, reset: true)
+
+        :edit_cancelled ->
+          providers = AIProviders.list()
+
+          socket
+          |> assign(assigns)
+          |> assign(:editing_provider_id, nil)
+          |> stream(:providers, providers, reset: true)
+
+        nil ->
+          providers = AIProviders.list()
+
+          socket
+          |> assign(assigns)
+          |> assign_new(:deleting_provider_id, fn -> nil end)
+          |> assign_new(:editing_provider_id, fn -> nil end)
+          |> stream(:providers, providers, dom_id: dom_id)
+      end
+
+    {:ok, socket}
   end
 
   @impl true
   def handle_event("edit", %{"id" => id}, socket) do
-    provider = Enum.find(AIProviders.list(socket.assigns.user_id), &(&1.id == id))
+    providers = AIProviders.list()
 
-    case provider do
-      nil ->
-        {:noreply, socket |> put_flash(:error, "Provider not found")}
+    {:noreply,
+     socket
+     |> assign(:editing_provider_id, id)
+     |> stream(:providers, providers, reset: true)}
+  end
 
-      _ ->
-        send(socket.parent_pid, {:edit_provider, provider})
-        {:noreply, socket}
+  def handle_event("confirm_delete", %{"id" => id}, socket) do
+    case AIProviders.delete(id) do
+      :ok ->
+        providers = AIProviders.list()
+
+        {:noreply,
+         socket
+         |> assign(:deleting_provider_id, nil)
+         |> stream(:providers, providers, reset: true)
+         |> put_flash(:info, "Provider removed")}
+
+      {:error, reason} ->
+        {:noreply,
+         socket
+         |> assign(:deleting_provider_id, nil)
+         |> put_flash(:error, "Failed to delete provider: #{inspect(reason)}")}
     end
+  end
+
+  def handle_event("cancel_delete", _params, socket) do
+    providers = AIProviders.list()
+
+    {:noreply,
+     socket
+     |> assign(:deleting_provider_id, nil)
+     |> stream(:providers, providers, reset: true)}
   end
 
   def handle_event("delete", %{"id" => id}, socket) do
-    case AIProviders.delete(id) do
-      :ok ->
-        {:noreply, put_flash(socket, :info, "Provider removed")}
+    providers = AIProviders.list()
 
-      {:error, reason} ->
-        {:noreply, socket |> put_flash(:error, "Failed to delete provider: #{inspect(reason)}")}
-    end
-  end
-
-  def handle_info({:provider_created, provider}, socket) do
-    user_id = socket.assigns.user_id
-
-    case Map.get(provider, :user_id) do
-      ^user_id ->
-        {:noreply, stream_insert(socket, :providers, provider)}
-
-      _ ->
-        {:noreply, socket}
-    end
-  end
-
-  def handle_info({:provider_updated, provider}, socket) do
-    user_id = socket.assigns.user_id
-
-    case Map.get(provider, :user_id) do
-      ^user_id ->
-        {:noreply, stream_insert(socket, :providers, provider)}
-
-      _ ->
-        {:noreply, socket}
-    end
-  end
-
-  def handle_info({:provider_deleted, %{id: id}}, socket) do
-    deleted = %{id: id}
-
-    case Enum.any?(AIProviders.list(socket.assigns.user_id), &(&1.id == id)) do
-      true ->
-        {:noreply, stream_delete(socket, :providers, deleted)}
-
-      false ->
-        {:noreply, socket}
-    end
+    {:noreply,
+     socket
+     |> assign(:deleting_provider_id, id)
+     |> stream(:providers, providers, reset: true)}
   end
 
   @impl true
   def render(assigns) do
     ~H"""
     <div>
-      <div :if={@streams.providers != []} class="card bg-base-200">
-        <div class="card-body p-6">
-          <h2 class="card-title text-base mb-4">Connected Providers</h2>
+      <div :if={@streams.providers != []} class="bg-slate-900 rounded-xl border border-slate-800">
+        <div class="p-6">
+          <h2 class="text-base font-semibold mb-4">Connected Providers</h2>
 
           <div id="providers" phx-update="stream" class="space-y-2">
-            <%= for {id, provider} <- @streams.providers do %>
+            <%= for {_id, provider} <- @streams.providers do %>
               <div
-                id={"provider-" <> to_string(id)}
-                class="flex items-center justify-between p-4 bg-base-100 rounded-lg gap-4"
+                id={"provider-#{provider.id}"}
+                class="flex flex-col gap-3 p-4 bg-slate-800/50 rounded-lg"
               >
-                <div>
-                  <p class="font-medium">{provider.name}</p>
-                  <p :if={provider.endpoint} class="text-sm text-base-content/60">
-                    {provider.endpoint}
-                  </p>
-                </div>
+                <%= if @editing_provider_id == provider.id do %>
+                  <.live_component
+                    module={PantheonWeb.Settings.ProviderEditComponent}
+                    id={"edit-#{provider.id}"}
+                    provider={provider}
+                  />
+                <% else %>
+                  <div class="flex items-center justify-between gap-4">
+                    <div>
+                      <p class="font-medium">{provider.name}</p>
+                      <p :if={provider.endpoint} class="text-sm text-slate-500">
+                        {provider.endpoint}
+                      </p>
+                    </div>
 
-                <div class="flex gap-2 flex-shrink-0">
-                  <button
-                    type="button"
-                    phx-click="edit"
-                    phx-value-id={id}
-                    phx-target={@myself}
-                    class="btn btn-sm btn-ghost"
-                  >
-                    Edit
-                  </button>
+                    <div class="flex gap-2 shrink-0">
+                      <%= if @deleting_provider_id == provider.id do %>
+                        <span class="text-xs text-red-400 mr-2">Remove?</span>
+                        <button
+                          type="button"
+                          phx-click="confirm_delete"
+                          phx-value-id={provider.id}
+                          phx-target={@myself}
+                          class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-red-200 bg-red-900/50 rounded-lg hover:bg-red-950 transition-colors"
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          type="button"
+                          phx-click="cancel_delete"
+                          phx-target={@myself}
+                          class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg hover:bg-slate-900 bg-slate-700 transition-colors"
+                        >
+                          Deny
+                        </button>
+                      <% else %>
+                        <button
+                          type="button"
+                          phx-click="edit"
+                          phx-value-id={provider.id}
+                          phx-target={@myself}
+                          class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg hover:bg-slate-700 transition-colors bg-slate-900"
+                        >
+                          Edit
+                        </button>
 
-                  <button
-                    type="button"
-                    phx-click="delete"
-                    phx-value-id={id}
-                    phx-target={@myself}
-                    data-confirm="Remove this provider?"
-                    class="btn btn-sm btn-ghost text-red-500 hover:bg-red-500/10"
-                  >
-                    Delete
-                  </button>
-                </div>
+                        <button
+                          type="button"
+                          phx-click="delete"
+                          phx-value-id={provider.id}
+                          phx-target={@myself}
+                          class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-red-400 rounded-lg hover:bg-red-900/30 transition-colors"
+                        >
+                          Delete
+                        </button>
+                      <% end %>
+                    </div>
+                  </div>
+
+                  <div :if={provider.models != []} class="flex flex-wrap gap-1.5">
+                    <%= for model_id <- provider.models do %>
+                      <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs bg-slate-700 text-slate-300">
+                        {model_id}
+                      </span>
+                    <% end %>
+                  </div>
+                <% end %>
               </div>
             <% end %>
           </div>

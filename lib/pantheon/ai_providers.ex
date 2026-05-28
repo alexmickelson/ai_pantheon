@@ -2,25 +2,26 @@ defmodule Pantheon.AIProviders do
   use GenServer
   require Logger
   alias Pantheon.Data.AIProviderDB
+  alias Pantheon.AIProviders.OpenAICompatible
 
   @topic "ai_providers"
 
-  defstruct providers_by_user: %{}
+  defstruct providers: [], pending_model_fetches: %{}
 
   def start_link(_opts) do
     GenServer.start_link(__MODULE__, [], name: __MODULE__)
   end
 
-  def list(user_id) do
-    GenServer.call(__MODULE__, {:list, user_id})
+  def list() do
+    GenServer.call(__MODULE__, :list)
   end
 
-  def subscribe(user_id) do
-    Phoenix.PubSub.subscribe(Pantheon.PubSub, topic(user_id))
+  def subscribe() do
+    Phoenix.PubSub.subscribe(Pantheon.PubSub, @topic)
   end
 
-  def create(user_id, attrs) do
-    GenServer.call(__MODULE__, {:create, user_id, attrs})
+  def create(attrs) do
+    GenServer.call(__MODULE__, {:create, attrs})
   end
 
   def update(provider_id, attrs) do
@@ -33,104 +34,163 @@ defmodule Pantheon.AIProviders do
 
   @impl true
   def init(_opts) do
-    state = load_from_db()
-    {:ok, state}
+    parent = self()
+
+    Task.async(fn ->
+      providers = AIProviderDB.load_all_for_cache()
+      send(parent, {:db_loaded, providers})
+    end)
+
+    {:ok, %__MODULE__{}}
   end
 
-  def handle_call({:list, user_id}, _from, state) do
-    providers = Map.get(state.providers_by_user, user_id, [])
-    {:reply, providers, state}
+  def handle_call(:list, _from, %__MODULE__{} = state) do
+    {:reply, state.providers, state}
   end
 
   @impl true
-  def handle_call({:create, user_id, attrs}, _from, state) do
-    case AIProviderDB.create(user_id, attrs) do
+  def handle_call({:create, attrs}, _from, %__MODULE__{} = state) do
+    case AIProviderDB.create(attrs) do
       {:ok, provider} ->
-        new_state = update_cache(state, user_id, &[provider | &1])
-        broadcast(user_id, :provider_created, provider)
-        {:reply, {:ok, provider}, new_state}
+        provider_with_models = Map.put(provider, :models, [])
+        new_state = %__MODULE__{state | providers: [provider_with_models | state.providers]}
+
+        spawn_model_fetch(new_state, provider)
+
+        broadcast(:provider_created, provider_with_models)
+        {:reply, {:ok, provider_with_models}, new_state}
 
       {:error, reason} ->
         {:reply, {:error, reason}, state}
     end
   end
 
-  def handle_call({:update, provider_id, attrs}, _from, state) do
+  def handle_call({:update, provider_id, attrs}, _from, %__MODULE__{} = state) do
     case AIProviderDB.update(provider_id, attrs) do
       {:ok, provider} ->
-        new_state =
-          update_cache(state, provider.user_id, fn existing ->
-            Enum.map(existing, fn p ->
-              if p.id == provider_id, do: provider, else: p
-            end)
-          end)
+        provider_with_models = Map.put(provider, :models, [])
 
-        broadcast(provider.user_id, :provider_updated, provider)
-        {:reply, {:ok, provider}, new_state}
+        new_state = %__MODULE__{
+          state
+          | providers:
+              Enum.map(state.providers, fn p ->
+                if p.id == provider_id, do: provider_with_models, else: p
+              end)
+        }
+
+        spawn_model_fetch(new_state, provider)
+
+        broadcast(:provider_updated, provider_with_models)
+        {:reply, {:ok, provider_with_models}, new_state}
 
       {:error, reason} ->
         {:reply, {:error, reason}, state}
     end
   end
 
-  def handle_call({:delete, provider_id}, _from, state) do
-    user_id = find_user_id(state, provider_id)
-
+  def handle_call({:delete, provider_id}, _from, %__MODULE__{} = state) do
     case AIProviderDB.delete(provider_id) do
-      :ok when not is_nil(user_id) ->
-        new_state =
-          update_cache(state, user_id, fn providers ->
-            Enum.reject(providers, fn p -> p.id == provider_id end)
-          end)
+      :ok ->
+        new_state = %__MODULE__{
+          state
+          | providers: Enum.reject(state.providers, fn p -> p.id == provider_id end)
+        }
 
-        broadcast(user_id, :provider_deleted, %{id: provider_id})
+        broadcast(:provider_deleted, %{id: provider_id})
         {:reply, :ok, new_state}
 
-      :ok ->
-        {:reply, :ok, state}
-
       {:error, reason} ->
         {:reply, {:error, reason}, state}
     end
   end
 
-  defp load_from_db() do
-    providers = AIProviderDB.load_all_for_cache()
-
-    by_user =
-      Enum.group_by(providers, fn provider -> provider.user_id end)
-
-    %__MODULE__{providers_by_user: by_user}
+  defp broadcast(event, payload) do
+    Phoenix.PubSub.broadcast(Pantheon.PubSub, @topic, {event, payload})
   end
 
-  defp update_cache(%__MODULE__{} = state, user_id, updater) do
-    providers = Map.get(state.providers_by_user, user_id, [])
-    new_providers = updater.(providers)
+  @impl true
+  def handle_info({:db_loaded, providers}, %__MODULE__{} = state) do
+    with_empty_models = Enum.map(providers, &Map.put(&1, :models, []))
 
-    updated_map =
-      if new_providers == [] do
-        Map.delete(state.providers_by_user, user_id)
-      else
-        Map.put(state.providers_by_user, user_id, new_providers)
-      end
+    for provider <- providers do
+      spawn_model_fetch(state, provider)
+    end
 
-    %__MODULE__{state | providers_by_user: updated_map}
+    {:noreply, %__MODULE__{state | providers: with_empty_models}}
   end
 
-  defp broadcast(user_id, event, payload) do
-    Phoenix.PubSub.broadcast(Pantheon.PubSub, topic(user_id), {event, payload})
+  def handle_info({:DOWN, ref, :process, _pid, :normal}, %__MODULE__{} = state) do
+    {:noreply,
+     %__MODULE__{state | pending_model_fetches: Map.delete(state.pending_model_fetches, ref)}}
   end
 
-  defp topic(user_id) do
-    "#{@topic}:user:#{user_id}"
+  def handle_info({:DOWN, ref, :process, _pid, reason}, %__MODULE__{} = state) do
+    case Map.pop(state.pending_model_fetches, ref) do
+      {nil, ^state} ->
+        {:noreply, state}
+
+      {{%{provider_id: provider_id}}, new_state} ->
+        Logger.warning(
+          "Model fetch task crashed for provider #{inspect(provider_id)} with reason: #{inspect(reason)}"
+        )
+
+        {:noreply, new_state}
+
+      {_, new_state} ->
+        {:noreply, new_state}
+    end
   end
 
-  defp find_user_id(state, provider_id) do
-    Enum.reduce_while(state.providers_by_user, nil, fn {_user_id, providers}, _acc ->
-      case Enum.find(providers, &(&1.id == provider_id)) do
-        %{user_id: user_id} -> {:halt, user_id}
-        nil -> {:cont, nil}
-      end
-    end)
+  def handle_info({:models_fetched, provider_id, models}, %__MODULE__{} = state) do
+    case Enum.find(state.providers, &(&1.id == provider_id)) do
+      nil ->
+        {:noreply, state}
+
+      _provider ->
+        new_state = %__MODULE__{
+          state
+          | providers:
+              Enum.map(state.providers, fn p ->
+                if p.id == provider_id, do: Map.put(p, :models, models), else: p
+              end)
+        }
+
+        updated = Enum.find(new_state.providers, &(&1.id == provider_id))
+        broadcast(:provider_updated, updated)
+        {:noreply, new_state}
+    end
+  end
+
+  def handle_info(msg, %__MODULE__{} = state) do
+    Logger.warning("Unhandled message received in AIProviders GenServer: #{inspect(msg)}")
+    {:noreply, state}
+  end
+
+  defp spawn_model_fetch(state, provider) do
+    parent = self()
+    provider_id = provider.id
+
+    task =
+      Task.async(fn ->
+        models =
+          case OpenAICompatible.fetch_models(provider.endpoint, provider.auth_token) do
+            {:ok, fetched} ->
+              Enum.map(fetched, & &1.id)
+
+            {:error, reason} ->
+              Logger.warning("Failed to fetch models for provider #{provider.name}: #{reason}")
+              []
+          end
+
+        send(parent, {:models_fetched, provider_id, models})
+      end)
+
+    ref = Process.monitor(task.pid)
+
+    %{
+      state
+      | pending_model_fetches:
+          Map.put(state.pending_model_fetches, ref, %{provider_id: provider_id})
+    }
   end
 end

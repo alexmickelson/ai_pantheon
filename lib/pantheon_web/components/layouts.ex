@@ -35,7 +35,7 @@ defmodule PantheonWeb.Layouts do
 
   def app(assigns) do
     ~H"""
-    <header class="navbar px-4 sm:px-6 lg:px-8">
+    <header class="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-3 border-b border-slate-800">
       <div class="flex-1">
         <.link
           navigate="/"
@@ -48,25 +48,28 @@ defmodule PantheonWeb.Layouts do
         <ul class="flex items-center gap-4">
           <%= if @current_scope do %>
             <li>
-              <span class="text-sm text-base-content/60 truncate max-w-[12rem] hidden sm:inline">
+              <span class="text-sm text-slate-500 truncate max-w-[12rem] hidden sm:inline">
                 {@current_scope.email}
               </span>
             </li>
             <li>
-              <.link navigate="/auth/logout" class="btn btn-ghost btn-sm">
+              <.link
+                navigate="/auth/logout"
+                class="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors"
+              >
                 Logout
               </.link>
             </li>
           <% else %>
             <li>
-              <.link navigate="/auth/login" class="btn btn-primary btn-sm">
+              <.link
+                navigate="/auth/login"
+                class="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-500 transition-colors"
+              >
                 Sign in
               </.link>
             </li>
           <% end %>
-          <li>
-            <.theme_toggle />
-          </li>
         </ul>
       </div>
     </header>
@@ -129,35 +132,4 @@ defmodule PantheonWeb.Layouts do
 
   See <head> in root.html.heex which applies the theme before page load.
   """
-  def theme_toggle(assigns) do
-    ~H"""
-    <div class="card relative flex flex-row items-center border-2 border-base-300 bg-base-300 rounded-full">
-      <div class="absolute w-1/3 h-full rounded-full border-1 border-base-200 bg-base-100 brightness-200 left-0 [[data-theme=light]_&]:left-1/3 [[data-theme=dark]_&]:left-2/3 transition-[left]" />
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="system"
-      >
-        <.icon name="hero-computer-desktop-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="light"
-      >
-        <.icon name="hero-sun-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="dark"
-      >
-        <.icon name="hero-moon-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
-    </div>
-    """
-  end
 end

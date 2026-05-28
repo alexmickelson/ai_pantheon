@@ -1,9 +1,16 @@
 defmodule PantheonWeb.Settings.AIProvidersLive do
   use PantheonWeb, :live_view
 
+  alias Pantheon.AIProviders
+  alias PantheonWeb.Settings.ProvidersListComponent
+
   @impl true
   def mount(_params, session, socket) do
     user_id = session["current_user_id"]
+
+    if connected?(socket) do
+      AIProviders.subscribe()
+    end
 
     {:ok,
      socket
@@ -19,6 +26,24 @@ defmodule PantheonWeb.Settings.AIProvidersLive do
   @impl true
   def handle_info({:form_cancelled}, socket) do
     {:noreply, assign(socket, :editing_provider, nil)}
+  end
+
+  @impl true
+  def handle_info({:provider_created, provider}, socket) do
+    send_update(ProvidersListComponent, id: "providers-list", action: {:insert, provider})
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:provider_updated, provider}, socket) do
+    send_update(ProvidersListComponent, id: "providers-list", action: {:update, provider})
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:provider_deleted, payload}, socket) do
+    send_update(ProvidersListComponent, id: "providers-list", action: {:delete, payload})
+    {:noreply, socket}
   end
 
   @impl true

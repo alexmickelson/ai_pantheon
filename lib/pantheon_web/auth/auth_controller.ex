@@ -1,7 +1,7 @@
 defmodule PantheonWeb.AuthController do
   use PantheonWeb, :controller
   require Logger
-  alias Pantheon.Data.User
+  alias Pantheon.Data.UserDB
 
   @doc false
   def call(conn, action) do
@@ -78,7 +78,7 @@ defmodule PantheonWeb.AuthController do
         _ -> nil
       end
 
-    case User.find_or_create(email) do
+    case UserDB.find_or_create(email) do
       {:ok, user} ->
         return_to = get_session(conn, "return_to") || "/"
 
@@ -139,7 +139,6 @@ defmodule PantheonWeb.AuthController do
       new_refresh =
         case new_token.refresh do
           %Oidcc.Token.Refresh{token: rt} -> rt
-          _ -> refresh_token
         end
 
       Logger.info("auth_controller.refresh success sub=#{sub} new_exp=#{new_exp}")
@@ -157,13 +156,6 @@ defmodule PantheonWeb.AuthController do
       {:error, reason} ->
         Logger.error(
           "auth_controller.refresh OIDC error sub=#{inspect(sub)} reason=#{inspect(reason)}"
-        )
-
-        send_resp(conn, 401, "")
-
-      other ->
-        Logger.error(
-          "auth_controller.refresh unexpected failure sub=#{inspect(sub)} result=#{inspect(other)}"
         )
 
         send_resp(conn, 401, "")

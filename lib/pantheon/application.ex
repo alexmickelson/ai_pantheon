@@ -9,6 +9,7 @@ defmodule Pantheon.Application do
   def start(_type, _args) do
     children =
       repo_children() ++
+        databaseChildren() ++
         [
           PantheonWeb.Telemetry,
           {DNSCluster, query: Application.get_env(:pantheon, :dns_cluster_query) || :ignore},
@@ -30,6 +31,13 @@ defmodule Pantheon.Application do
   defp repo_children() do
     case Application.fetch_env(:pantheon, :ecto_repos) do
       {:ok, [repo | _]} -> [repo]
+      _ -> []
+    end
+  end
+
+  defp databaseChildren() do
+    case Application.fetch_env(:pantheon, :ecto_repos) do
+      {:ok, [_repo | _]} -> [Pantheon.AIProviders]
       _ -> []
     end
   end

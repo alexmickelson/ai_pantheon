@@ -11,7 +11,8 @@ defmodule Pantheon.MixProject do
       aliases: aliases(),
       deps: deps(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
-      listeners: [Phoenix.CodeReloader]
+      listeners: [Phoenix.CodeReloader],
+      dialyzer: dialyzer_opts()
     ]
   end
 
@@ -35,6 +36,11 @@ defmodule Pantheon.MixProject do
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
 
+  # Dialyzer options - include ExUnit and Mix in PLT for test env analysis
+  defp dialyzer_opts() do
+    [plt_add_apps: [:ex_unit, :mix]]
+  end
+
   # Specifies your project dependencies.
   #
   # Type `mix help deps` for examples and options.
@@ -55,6 +61,7 @@ defmodule Pantheon.MixProject do
        app: false,
        compile: false,
        depth: 1},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:req, "~> 0.5"},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
@@ -86,7 +93,13 @@ defmodule Pantheon.MixProject do
         "esbuild pantheon --minify",
         "phx.digest"
       ],
-      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
+      precommit: [
+        "compile --warnings-as-errors",
+        "dialyzer --quiet-with-result",
+        "deps.unlock --unused",
+        "format",
+        "test"
+      ]
     ]
   end
 end

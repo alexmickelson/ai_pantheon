@@ -21,13 +21,13 @@ defmodule PantheonWeb.Router do
   scope "/", PantheonWeb do
     pipe_through [:browser, PantheonWeb.Plugs.RefreshToken]
 
-    get "/", PageController, :home
+    get "/unauthenticated", PageController, :home
   end
 
   scope "/", PantheonWeb do
     pipe_through [:browser, :require_authenticated, PantheonWeb.Plugs.RefreshToken]
 
-    # Add authenticated routes here
+    live "/", Settings.AIProvidersLive, :index
   end
 
   scope "/auth", PantheonWeb do

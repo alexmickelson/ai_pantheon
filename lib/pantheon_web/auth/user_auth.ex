@@ -4,7 +4,8 @@ defmodule PantheonWeb.UserAuth do
   import Phoenix.LiveView.Utils, only: [put_flash: 3, push_event: 4]
   import Phoenix.LiveView.Lifecycle, only: [attach_hook: 4]
   require Logger
-  alias Pantheon.Data.User
+  alias Pantheon.Data.UserDB
+  alias Pantheon.Data.UserDB
 
   @refresh_before_seconds 60
 
@@ -53,7 +54,7 @@ defmodule PantheonWeb.UserAuth do
           :error
 
         _ ->
-          case User.get_by_id(user_id) do
+          case UserDB.get_by_id(user_id) do
             {:ok, user} ->
               {:ok, user}
 

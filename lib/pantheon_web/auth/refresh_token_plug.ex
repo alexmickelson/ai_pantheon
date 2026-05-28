@@ -56,7 +56,6 @@ defmodule PantheonWeb.Plugs.RefreshToken do
           new_refresh_token =
             case new_token.refresh do
               %Oidcc.Token.Refresh{token: rt} -> rt
-              _ -> refresh_token
             end
 
           conn

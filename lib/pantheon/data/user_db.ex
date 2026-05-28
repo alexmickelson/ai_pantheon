@@ -1,4 +1,4 @@
-defmodule Pantheon.Data.User do
+defmodule Pantheon.Data.UserDB do
   require Logger
   alias Pantheon.Data.DbHelpers
 

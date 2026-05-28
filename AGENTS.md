@@ -1,31 +1,27 @@
-# Tech Stack
+whenever possible avoid using `call` for genservers, syncronous communication is to be avoided
 
-Phoenix LiveView app backed by PostgreSQL. do not include useless comments, if the code is not easy to read, use better naming conventions and single-level of abstraction functions.
+the domain owners are usually genservers, have them communicate with the frontend via pubsub.
+
+liveview pages are not allowed to directly interact with the database. they must communicate with the domain owner genservers who will get the correct information to them.
+
+do not include useless comments, if the code is not easy to read, use better naming conventions and single-level of abstraction functions.
 
 never silently ignore errors. make sure that errors properly get displayed to the user via either message passing or pubsub. 
 
 avoid empty catch-all clauses that hide errors
 
-## Database
-
 Phoenix connects to Postgres via `Ecto.Repo` (no Ecto schemas). All queries use `DbHelpers.run_sql/2,3` with named parameters (`$(param_name)`), which are converted to positional Postgrex params at runtime. Query results are optionally validated against a Zoi schema.
 
-## Configuration
+**SQL is only allowed in `*_db.ex` files under `lib/pantheon/data/`.** GenServers, LiveViews, controllers, and other modules must never contain raw SQL — they delegate to the corresponding `*DB` module for all database access.
 
 All runtime config is loaded from `.env` (via Dotenvy) merged with system env vars. Key variables:
-
-Copy `example.env` to `.env` and fill in values before starting the app.
-
-## Dev Environment
 
 `docker compose up` starts two containers:
 
 1. **db** — Postgres 17; `schema.sql` is mounted and run on first start
 2. **app** — Elixir/Phoenix; source is bind-mounted so live reload works
 
-## Getting feedback
-
-you can read current logs with `docker logs simplesyllabusreporter-app-1` be sure to use bash to filter for only the logs you care about.
+Read application logs with `docker logs ai_pantheon-app-1`
 
 when checking if changes compile use `mix compile` on the terminal (not in container)
 

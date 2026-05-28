@@ -1,6 +1,7 @@
 defmodule PantheonWeb.AuthController do
   use PantheonWeb, :controller
   require Logger
+  alias Pantheon.Data.User
 
   @doc false
   def call(conn, action) do
@@ -21,9 +22,15 @@ defmodule PantheonWeb.AuthController do
     do: Application.fetch_env!(:pantheon, :oidc) |> Keyword.fetch!(:client_id)
 
   def callback_uri(conn) do
-    default_port = URI.default_port(to_string(conn.scheme))
-    port_str = if conn.port == default_port, do: "", else: ":#{conn.port}"
-    "#{conn.scheme}://#{conn.host}#{port_str}/auth/callback"
+    case Application.fetch_env!(:pantheon, :oidc) |> Keyword.get(:redirect_uri) do
+      uri when is_binary(uri) ->
+        uri
+
+      nil ->
+        default_port = URI.default_port(to_string(conn.scheme))
+        port_str = if conn.port == default_port, do: "", else: ":#{conn.port}"
+        "#{conn.scheme}://#{conn.host}#{port_str}/auth/callback"
+    end
   end
 
   @pkce_profile_opts %{require_pkce: true}
@@ -71,18 +78,28 @@ defmodule PantheonWeb.AuthController do
         _ -> nil
       end
 
-    return_to = get_session(conn, "return_to") || "/"
+    case User.find_or_create(email) do
+      {:ok, user} ->
+        return_to = get_session(conn, "return_to") || "/"
 
-    conn
-    |> configure_session(renew: true)
-    |> delete_session("return_to")
-    |> put_session("oidc_claims", userinfo)
-    |> put_session("current_user_id", email)
-    |> put_session("session_expires_at", token_exp)
-    |> put_session("token_expires_at", token_exp)
-    |> put_session("refresh_token", refresh_token)
-    |> put_session("oidc_sub", Map.get(userinfo, "sub"))
-    |> redirect(to: return_to)
+        conn
+        |> configure_session(renew: true)
+        |> delete_session("return_to")
+        |> put_session("oidc_claims", userinfo)
+        |> put_session("current_user_id", user.id)
+        |> put_session("session_expires_at", token_exp)
+        |> put_session("token_expires_at", token_exp)
+        |> put_session("refresh_token", refresh_token)
+        |> put_session("oidc_sub", Map.get(userinfo, "sub"))
+        |> redirect(to: return_to)
+
+      {:error, reason} ->
+        Logger.error("Failed to find_or_create user email=#{email} reason=#{inspect(reason)}")
+
+        conn
+        |> put_flash(:error, "Login failed: could not load user profile")
+        |> redirect(to: ~p"/")
+    end
   end
 
   def callback(

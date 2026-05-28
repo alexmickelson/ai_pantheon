@@ -21,7 +21,6 @@ config :pantheon, PantheonWeb.Endpoint,
   pubsub_server: Pantheon.PubSub,
   live_view: [signing_salt: "qkhOAMAJ"]
 
-
 # Configure esbuild (the version is required)
 config :esbuild,
   version: "0.25.4",

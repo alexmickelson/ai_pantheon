@@ -8,11 +8,12 @@ defmodule Pantheon.Application do
   @impl true
   def start(_type, _args) do
     children =
-      [
-        PantheonWeb.Telemetry,
-        {DNSCluster, query: Application.get_env(:pantheon, :dns_cluster_query) || :ignore},
-        {Phoenix.PubSub, name: Pantheon.PubSub}
-      ] ++ oidc_children() ++ [PantheonWeb.Endpoint]
+      repo_children() ++
+        [
+          PantheonWeb.Telemetry,
+          {DNSCluster, query: Application.get_env(:pantheon, :dns_cluster_query) || :ignore},
+          {Phoenix.PubSub, name: Pantheon.PubSub}
+        ] ++ oidc_children() ++ [PantheonWeb.Endpoint]
 
     opts = [strategy: :one_for_one, name: Pantheon.Supervisor]
     Supervisor.start_link(children, opts)
@@ -24,6 +25,13 @@ defmodule Pantheon.Application do
   def config_change(changed, _new, removed) do
     PantheonWeb.Endpoint.config_change(changed, removed)
     :ok
+  end
+
+  defp repo_children() do
+    case Application.fetch_env(:pantheon, :ecto_repos) do
+      {:ok, [repo | _]} -> [repo]
+      _ -> []
+    end
   end
 
   defp oidc_children() do

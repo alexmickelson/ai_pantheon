@@ -4,6 +4,7 @@ defmodule PantheonWeb.UserAuth do
   import Phoenix.LiveView.Utils, only: [put_flash: 3, push_event: 4]
   import Phoenix.LiveView.Lifecycle, only: [attach_hook: 4]
   require Logger
+  alias Pantheon.Data.User
 
   @refresh_before_seconds 60
 
@@ -45,11 +46,28 @@ defmodule PantheonWeb.UserAuth do
     if session_expired?(session) do
       :error
     else
-      email = session["current_user_id"]
+      user_id = session["current_user_id"]
 
-      case email do
-        nil -> :error
-        _ -> {:ok, %{id: email, email: email}}
+      case user_id do
+        nil ->
+          :error
+
+        _ ->
+          case User.get_by_id(user_id) do
+            {:ok, user} ->
+              {:ok, user}
+
+            {:error, :not_found} ->
+              Logger.warning("User not found in DB for id=#{inspect(user_id)}, clearing session")
+              :error
+
+            {:error, reason} ->
+              Logger.error(
+                "Failed to fetch user id=#{inspect(user_id)} reason=#{inspect(reason)}"
+              )
+
+              :error
+          end
       end
     end
   end

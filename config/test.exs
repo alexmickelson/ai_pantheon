@@ -23,3 +23,6 @@ config :phoenix,
 
 # Disable OIDC in tests (no provider available)
 config :pantheon, :oidc, []
+
+# Disable database in tests
+config :pantheon, :ecto_repos, []

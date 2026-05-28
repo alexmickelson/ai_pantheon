@@ -23,7 +23,21 @@ end
 if config_env() != :test do
   config :pantheon, :oidc,
     issuer: System.get_env("OIDC_ISSUER", "http://localhost:4000/dummy"),
-    client_id: System.get_env("OIDC_CLIENT_ID", "dummy")
+    client_id: System.get_env("OIDC_CLIENT_ID", "dummy"),
+    redirect_uri: System.get_env("OIDC_REDIRECT_URI")
+end
+
+if config_env() != :test do
+  if System.get_env("DATABASE_URL") do
+    config :pantheon, :ecto_repos, [Pantheon.Repo]
+
+    config :pantheon, Pantheon.Repo,
+      url: System.get_env("DATABASE_URL"),
+      pool_size: String.to_integer(System.get_env("POOL_SIZE", "5")),
+      stacktrace: true
+  else
+    config :pantheon, :ecto_repos, []
+  end
 end
 
 config :pantheon, PantheonWeb.Endpoint,
@@ -88,5 +102,4 @@ if config_env() == :prod do
   #       force_ssl: [hsts: true]
   #
   # Check `Plug.SSL` for all available options in `force_ssl`.
-
 end

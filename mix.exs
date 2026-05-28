@@ -21,7 +21,7 @@ defmodule Pantheon.MixProject do
   def application do
     [
       mod: {Pantheon.Application, []},
-      extra_applications: [:logger, :runtime_tools]
+      extra_applications: [:logger, :runtime_tools, :ecto_sql]
     ]
   end
 
@@ -62,7 +62,11 @@ defmodule Pantheon.MixProject do
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
-      {:oidcc_plug, "~> 0.4.0"}
+      {:oidcc_plug, "~> 0.4.0"},
+      {:postgrex, ">= 0.22.0"},
+      {:ecto_sql, "~> 3.14"},
+      {:zoi, "~> 0.18"},
+      {:dotenvy, "~> 1.1"}
     ]
   end
 

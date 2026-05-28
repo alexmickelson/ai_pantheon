@@ -7,12 +7,6 @@ config :pantheon, PantheonWeb.Endpoint,
   secret_key_base: "g+7tnfjNeMawZqE75P9Vx94FIofPSn+a9e2VV91a2EN4COna2TFeaqZPrq9qc+eV",
   server: false
 
-# In test we don't send emails
-config :pantheon, Pantheon.Mailer, adapter: Swoosh.Adapters.Test
-
-# Disable swoosh api client as it is only required for production adapters
-config :swoosh, :api_client, false
-
 # Print only warnings and errors during test
 config :logger, level: :warning
 

@@ -48,7 +48,10 @@ spec:
                 name: app-config
           env:
             - name: DATABASE_URL
-              value: "ecto://pantheon_user:pantheon_pass@postgres:5432/pantheon_prod"
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: url
             - name: PHX_SERVER
               value: "true"
             - name: OIDC_ISSUER

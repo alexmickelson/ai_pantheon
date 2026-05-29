@@ -5,7 +5,6 @@ defmodule PantheonWeb.UserAuth do
   import Phoenix.LiveView.Lifecycle, only: [attach_hook: 4]
   require Logger
   alias Pantheon.Data.UserDB
-  alias Pantheon.Data.UserDB
 
   @refresh_before_seconds 60
 
@@ -40,7 +39,23 @@ defmodule PantheonWeb.UserAuth do
         :error -> nil
       end
 
-    {:cont, assign(socket, :current_user, user_info)}
+    current_scope =
+      case user_info do
+        %{} = user -> %{email: user.email}
+        nil -> nil
+      end
+
+    {:cont, assign(socket, :current_user, user_info) |> assign(:current_scope, current_scope)}
+  end
+
+  def on_mount(:current_user_for_layout, _params, session, socket) do
+    current_scope =
+      case fetch_current_user(session) do
+        {:ok, %{} = user} -> %{email: user.email}
+        :error -> nil
+      end
+
+    {:cont, assign(socket, :current_scope, current_scope)}
   end
 
   defp fetch_current_user(session) do

@@ -82,12 +82,12 @@ defmodule PantheonWeb.Layouts do
             </li>
           <% else %>
             <li>
-              <.link
-                navigate="/auth/login"
+              <a
+                href="/auth/login"
                 class="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-500 transition-colors"
               >
                 Sign in
-              </.link>
+              </a>
             </li>
           <% end %>
         </ul>

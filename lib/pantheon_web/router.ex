@@ -39,8 +39,10 @@ defmodule PantheonWeb.Router do
   scope "/", PantheonWeb do
     pipe_through [:browser, :require_authenticated, PantheonWeb.Plugs.RefreshToken]
 
-    live "/", Settings.AIProvidersLive, :index
-    live "/metrics", Metrics.MetricsLive, :index
+    live_session :default, on_mount: {PantheonWeb.UserAuth, :current_user_for_layout} do
+      live "/", Settings.AIProvidersLive, :index
+      live "/metrics", Metrics.MetricsLive, :index
+    end
   end
 
   scope "/auth", PantheonWeb do

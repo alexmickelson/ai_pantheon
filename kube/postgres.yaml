@@ -29,6 +29,10 @@ spec:
           ports:
             - containerPort: 5432
               name: postgres
+          # Secret "postgres-credentials" (not created here) must contain:
+          #   POSTGRES_USER    - database username
+          #   POSTGRES_PASSWORD - database password
+          #   POSTGRES_DB      - initial database name
           envFrom:
             - secretRef:
                 name: postgres-credentials

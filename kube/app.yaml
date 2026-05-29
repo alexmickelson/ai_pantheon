@@ -41,6 +41,10 @@ spec:
           ports:
             - containerPort: 4000
               name: http
+          # Secret "app-secret" (not created here) must contain:
+          #   SECRET_KEY_BASE  - Phoenix secret key (mix phx.gen.secret)
+          #   OIDC_ISSUER      - OIDC provider URL
+          #   OIDC_CLIENT_ID   - OIDC client identifier
           envFrom:
             - secretRef:
                 name: app-secret

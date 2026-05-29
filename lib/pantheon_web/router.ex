@@ -28,6 +28,8 @@ defmodule PantheonWeb.Router do
 
     get "/models", V1Controller, :list_models
     post "/chat/completions", V1Controller, :create_completion
+
+    match :*, "/*path", V1Controller, :unknown_path
   end
 
   scope "/", PantheonWeb do

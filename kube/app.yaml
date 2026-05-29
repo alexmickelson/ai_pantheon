@@ -126,4 +126,4 @@ spec:
           kind: Service	
           name: pantheon
           port: 4000
-          weight: 1
+          weight: 100

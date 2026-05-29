@@ -81,6 +81,23 @@ defmodule PantheonWeb.Proxy.V1Controller do
     end
   end
 
+  def unknown_path(conn, _params) do
+    Logger.warning(
+      "Unrecognized proxy endpoint requested: method=#{conn.method} path=#{conn.request_path} peer=#{conn.remote_ip |> Tuple.to_list() |> Enum.join(".")}"
+    )
+
+    error_body =
+      Jason.encode!(%{
+        error: %{
+          message:
+            "The /v1/#{conn.path_info |> Enum.join("/")} endpoint does not exist or is not implemented",
+          type: "not_found_error"
+        }
+      })
+
+    conn |> send_resp(404, error_body)
+  end
+
   defp find_provider_for_model(model_id) do
     providers = Pantheon.AIProviders.list()
 

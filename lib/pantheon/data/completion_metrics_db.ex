@@ -4,28 +4,28 @@ defmodule Pantheon.Data.CompletionMetricsDB do
 
   def schema do
     Zoi.object(%{
-      id: Zoi.uuid(),
+      id: Zoi.optional(Zoi.uuid()),
       user_id: Zoi.uuid(),
       api_key_id: Zoi.uuid(),
       provider_id: Zoi.uuid(),
       model: Zoi.string(),
       status_code: Zoi.integer(),
-      prompt_tokens: Zoi.optional(Zoi.integer()),
-      completion_tokens: Zoi.optional(Zoi.integer()),
-      total_tokens: Zoi.optional(Zoi.integer()),
-      cached_tokens: Zoi.optional(Zoi.integer()),
+      prompt_tokens: Zoi.nullish(Zoi.integer()),
+      completion_tokens: Zoi.nullish(Zoi.integer()),
+      total_tokens: Zoi.nullish(Zoi.integer()),
+      cached_tokens: Zoi.nullish(Zoi.integer()),
       prompt_ms: Zoi.nullish(Zoi.float()),
       predicted_ms: Zoi.nullish(Zoi.float()),
       prompt_per_token_ms: Zoi.nullish(Zoi.float()),
       predicted_per_token_ms: Zoi.nullish(Zoi.float()),
       prompt_per_second: Zoi.nullish(Zoi.float()),
       predicted_per_second: Zoi.nullish(Zoi.float()),
-      cache_n: Zoi.optional(Zoi.integer()),
-      draft_n: Zoi.optional(Zoi.integer()),
-      draft_n_accepted: Zoi.optional(Zoi.integer()),
-      response_latency_ms: Zoi.float(),
-      error_message: Zoi.optional(Zoi.string()),
-      inserted_at: Zoi.datetime()
+      cache_n: Zoi.nullish(Zoi.integer()),
+      draft_n: Zoi.nullish(Zoi.integer()),
+      draft_n_accepted: Zoi.nullish(Zoi.integer()),
+      response_latency_ms: Zoi.integer(),
+      error_message: Zoi.nullish(Zoi.string()),
+      inserted_at: Zoi.nullish(Zoi.datetime())
     })
   end
 
@@ -51,10 +51,24 @@ defmodule Pantheon.Data.CompletionMetricsDB do
     })
   end
 
-  @doc """
-  Inserts a completion metrics record. Fire-and-forget friendly.
-  """
-  def insert(%{} = attrs) do
+  def insert(%Pantheon.AiProxy.CompletionMetrics{} = metrics) do
+    atom_attrs = Map.from_struct(metrics)
+
+    case Zoi.parse(schema(), atom_attrs) do
+      {:ok, _validated} ->
+        string_attrs = to_string_keyed(atom_attrs)
+        do_insert(string_attrs)
+
+      {:error, errors} ->
+        Logger.error(
+          "Completion metrics insert failed validation for model '#{Map.get(atom_attrs, :model)}': #{inspect(errors)}"
+        )
+
+        :ok
+    end
+  end
+
+  defp do_insert(%{} = attrs) do
     sql = """
     INSERT INTO completion_metrics (
       user_id, api_key_id, provider_id, model, status_code,
@@ -73,52 +87,30 @@ defmodule Pantheon.Data.CompletionMetricsDB do
     ) RETURNING id, inserted_at
     """
 
-    params = %{
-      "user_id" => Map.get(attrs, :user_id),
-      "api_key_id" => Map.get(attrs, :api_key_id),
-      "provider_id" => Map.get(attrs, :provider_id),
-      "model" => Map.get(attrs, :model),
-      "status_code" => Map.get(attrs, :status_code),
-      "prompt_tokens" => Map.get(attrs, :prompt_tokens),
-      "completion_tokens" => Map.get(attrs, :completion_tokens),
-      "total_tokens" => Map.get(attrs, :total_tokens),
-      "cached_tokens" => Map.get(attrs, :cached_tokens),
-      "prompt_ms" => Map.get(attrs, :prompt_ms),
-      "predicted_ms" => Map.get(attrs, :predicted_ms),
-      "prompt_per_token_ms" => Map.get(attrs, :prompt_per_token_ms),
-      "predicted_per_token_ms" => Map.get(attrs, :predicted_per_token_ms),
-      "prompt_per_second" => Map.get(attrs, :prompt_per_second),
-      "predicted_per_second" => Map.get(attrs, :predicted_per_second),
-      "cache_n" => Map.get(attrs, :cache_n),
-      "draft_n" => Map.get(attrs, :draft_n),
-      "draft_n_accepted" => Map.get(attrs, :draft_n_accepted),
-      "response_latency_ms" => Map.get(attrs, :response_latency_ms),
-      "error_message" => Map.get(attrs, :error_message)
-    }
-
-    case DbHelpers.run_sql(sql, params) do
+    case DbHelpers.run_sql(sql, attrs) do
       [_result | _] ->
         :ok
 
       [] ->
         Logger.warning(
-          "Completion metrics insert returned no rows for model '#{Map.get(attrs, :model)}'"
+          "Completion metrics insert returned no rows for model '#{Map.get(attrs, "model")}'"
         )
 
         :ok
 
       {:error, reason} ->
         Logger.error(
-          "Failed to insert completion metrics for model '#{Map.get(attrs, :model)}': #{inspect(reason)}"
+          "Failed to insert completion metrics for model '#{Map.get(attrs, "model")}': #{inspect(reason)}"
         )
 
         :ok
     end
   end
 
-  @doc """
-  Returns the most recent completions (up to limit), ordered by inserted_at DESC.
-  """
+  defp to_string_keyed(attrs) when is_map(attrs) do
+    for {k, v} <- attrs, into: %{}, do: {to_string(k), v}
+  end
+
   def list_recent(limit \\ 100) do
     sql = """
     SELECT cm.id, cm.provider_id, p.name AS provider_name, cm.model, cm.status_code,
@@ -144,9 +136,6 @@ defmodule Pantheon.Data.CompletionMetricsDB do
     end
   end
 
-  @doc """
-  Aggregates metrics grouped by provider and model for the last N hours.
-  """
   def aggregate_by_provider(hours \\ 24) do
     sql = """
     SELECT cm.provider_id, p.name AS provider_name, cm.model,
@@ -179,9 +168,6 @@ defmodule Pantheon.Data.CompletionMetricsDB do
     end
   end
 
-  @doc """
-  Returns summary statistics for the last N hours across all providers.
-  """
   def aggregate_summary(hours) do
     sql = """
     SELECT COUNT(*) AS total_requests,
@@ -208,10 +194,6 @@ defmodule Pantheon.Data.CompletionMetricsDB do
     end
   end
 
-  @doc """
-  Aggregates metrics grouped by model for the last N hours.
-  Returns bar chart data with label (model name), requests, avg_latency_ms, total_tokens, error_count.
-  """
   def aggregate_by_model(hours) do
     sql = """
     SELECT cm.model AS label,
@@ -235,10 +217,6 @@ defmodule Pantheon.Data.CompletionMetricsDB do
     end
   end
 
-  @doc """
-  Aggregates metrics grouped by user for the last N hours.
-  Returns bar chart data with label (user email), requests, avg_latency_ms, total_tokens, error_count.
-  """
   def aggregate_by_user(hours) do
     sql = """
     SELECT u.email AS label,
@@ -264,10 +242,6 @@ defmodule Pantheon.Data.CompletionMetricsDB do
     end
   end
 
-  @doc """
-  Aggregates metrics grouped by API key for the last N hours.
-  Returns bar chart data with label (key name/prefix), requests, avg_latency_ms, total_tokens, error_count.
-  """
   def aggregate_by_api_key(hours) do
     sql = """
     SELECT COALESCE(uak.name, uak.key_prefix) AS label,

@@ -22,6 +22,8 @@ defmodule Pantheon.AiProxy.RequestWorker do
     start_time = System.monotonic_time(:millisecond)
 
     base_url = String.trim_trailing(provider.endpoint, "/")
+    existing_opts = Map.get(body, "stream_options", %{})
+    body = Map.put(body, "stream_options", Map.merge(%{"include_usage" => true}, existing_opts))
     url = build_url(base_url, path, body)
 
     headers = [
@@ -36,7 +38,9 @@ defmodule Pantheon.AiProxy.RequestWorker do
       {:ok, %Req.Response{status: 200} = resp} ->
         send(client_pid, {:proxy_stream_init, 200})
         final_chunks = stream_loop(resp, client_pid, [])
-        elapsed = System.monotonic_time(:millisecond) - start_time
+        elapsed_ms = System.monotonic_time(:millisecond) - start_time
+
+        log_final_response(final_chunks, model, Map.get(provider, :id))
 
         metrics =
           CompletionMetrics.from_stream(
@@ -45,7 +49,7 @@ defmodule Pantheon.AiProxy.RequestWorker do
             Map.get(provider, :id),
             model,
             200,
-            elapsed,
+            elapsed_ms,
             final_chunks
           )
 
@@ -94,6 +98,14 @@ defmodule Pantheon.AiProxy.RequestWorker do
     end
   end
 
+  defp log_final_response([], _model, _provider_id) do
+    :ok
+  end
+
+  defp log_final_response(_chunks, _model, _provider_id) do
+    :ok
+  end
+
   defp stream_loop(resp, client_pid, final_chunks) do
     receive do
       message ->
@@ -104,6 +116,7 @@ defmodule Pantheon.AiProxy.RequestWorker do
             stream_loop(resp, client_pid, new_final)
 
           {:ok, [:done]} ->
+            Logger.debug("Stream done: collected #{length(final_chunks)} chunks for metrics")
             final_chunks
 
           {:ok, [trailers: _trailers]} ->
@@ -135,24 +148,35 @@ defmodule Pantheon.AiProxy.RequestWorker do
   end
 
   defp accumulate_final(chunk, chunks) when is_binary(chunk) do
-    trimmed = String.trim_leading(chunk, "data: ")
-    trimmed = String.trim_trailing(trimmed)
+    segments = String.split(chunk, "\n\n", trim: true)
 
-    if trimmed == "[DONE]" do
-      chunks
-    else
-      case Jason.decode(trimmed) do
-        {:ok, _} -> chunks ++ [trimmed]
-        {:error, _} -> chunks
+    Enum.reduce(segments, chunks, fn segment, acc ->
+      trimmed =
+        segment
+        |> String.trim_leading("data: ")
+        |> String.trim_trailing()
+
+      if trimmed == "[DONE]" do
+        Logger.debug("Discarding [DONE] chunk")
+        acc
+      else
+        case Jason.decode(trimmed) do
+          {:ok, _parsed} ->
+            acc ++ [trimmed]
+
+          {:error, reason} ->
+            Logger.warning("Failed to decode accumulated chunk: #{inspect(reason)}")
+            acc
+        end
       end
-    end
+    end)
   end
 
   defp accumulate_final(_chunk, chunks), do: chunks
 
   defp report(%CompletionMetrics{} = metrics) do
-    db_attrs = CompletionMetrics.to_db_map(metrics)
-    Task.start(fn -> Pantheon.Data.CompletionMetricsDB.insert(db_attrs) end)
+    Logger.debug("Reporting completion metrics: #{inspect(metrics)}")
+    Pantheon.Data.CompletionMetricsDB.insert(metrics)
   end
 
   defp build_url(base, path, body) do

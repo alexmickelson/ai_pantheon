@@ -48,13 +48,7 @@ defmodule PantheonWeb.Layouts do
             <li>
               <.link
                 navigate="/"
-                class={[
-                  "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
-                  if(@current_scope,
-                    do: "text-slate-400 hover:text-white hover:bg-slate-800",
-                    else: "opacity-50 pointer-events-none"
-                  )
-                ]}
+                class="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
               >
                 Settings
               </.link>
@@ -62,13 +56,7 @@ defmodule PantheonWeb.Layouts do
             <li>
               <.link
                 navigate="/metrics"
-                class={[
-                  "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
-                  if(@current_scope,
-                    do: "text-slate-400 hover:text-white hover:bg-slate-800",
-                    else: "opacity-50 pointer-events-none"
-                  )
-                ]}
+                class="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
               >
                 Metrics
               </.link>
@@ -80,7 +68,7 @@ defmodule PantheonWeb.Layouts do
         <ul class="flex items-center gap-4">
           <%= if @current_scope do %>
             <li>
-              <span class="text-sm text-slate-500 truncate max-w-[12rem] hidden sm:inline">
+              <span class="text-sm text-slate-500 truncate max-w-48 hidden sm:inline">
                 {@current_scope.email}
               </span>
             </li>

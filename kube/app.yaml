@@ -113,12 +113,16 @@ metadata:
   namespace: pantheon
 spec:
   parentRefs:
-    - name: pantheon-gateway
+    - group: gateway.networking.k8s.io	
+      kind: Gateway	
+      name: pantheon-gateway
   rules:
     - matches:
         - path:
             type: PathPrefix
             value: /
       backendRefs:
-        - name: pantheon
+        - group: ''	
+          kind: Service	
+          name: pantheon
           port: 4000

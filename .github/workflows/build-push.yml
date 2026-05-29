@@ -24,6 +24,5 @@ jobs:
           IMAGE="ghcr.io/${{ github.repository_owner }}/pantheon-gateway"
           TAG="${{ github.run_number }}"
 
-          docker build -t "${IMAGE}:${TAG}" -t "${IMAGE}:latest" .
+          docker build -t "${IMAGE}:${TAG}" .
           docker push "${IMAGE}:${TAG}"
-          docker push "${IMAGE}:latest"

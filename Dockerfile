@@ -39,7 +39,7 @@ FROM docker.io/library/alpine:3.21 AS app
 
 ARG MIX_ENV
 
-RUN apk add --no-cache libgcc libsasl ca-certificates openssl
+RUN apk add --no-cache libgcc libstdc++ ncurses libsasl ca-certificates openssl
 
 RUN addgroup -g 1000 elixir && \
   adduser -u 1000 -G elixir -D elixir

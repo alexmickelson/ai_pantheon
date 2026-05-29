@@ -1,9 +1,9 @@
 ARG ELIXIR_VERSION=1.19.5
 ARG OTP_VERSION=28
-ARG DEBIAN_SLIM=bookworm-slim
 ARG MIX_ENV=prod
 
-FROM docker.io/elixir:${ELIXIR_VERSION}-otp-${OTP_VERSION} AS build
+# Build stage: Alpine for musl-compatible release
+FROM docker.io/elixir:${ELIXIR_VERSION}-otp-${OTP_VERSION}-alpine AS build
 
 ARG MIX_ENV
 
@@ -12,9 +12,7 @@ ENV MIX_ENV=${MIX_ENV} \
 
 WORKDIR /app
 
-RUN apt-get update -y && \
-  apt-get install -y build-essential git nodejs npm && \
-  rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache gcc musl-dev git nodejs npm
 
 RUN mix local.hex --force && \
   mix local.rebar --force
@@ -37,16 +35,14 @@ COPY assets ./assets
 RUN mix assets.deploy
 RUN mix release
 
-FROM docker.io/library/debian:bookworm AS app
+FROM docker.io/library/alpine:3.21 AS app
 
 ARG MIX_ENV
 
-RUN apt-get update -y && \
-  apt-get install -y libodbc1 libsasl2-modules ca-certificates && \
-  rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache libgcc libsasl ca-certificates openssl
 
-RUN groupadd -g 1000 elixir && \
-  useradd -u 1000 -g elixir -m elixir
+RUN addgroup -g 1000 elixir && \
+  adduser -u 1000 -G elixir -D elixir
 
 WORKDIR /app
 

@@ -87,6 +87,8 @@ defmodule PantheonWeb.Metrics.Components.MetricsChart do
       phx-update="ignore"
       class="relative"
       style={"height: #{@height};"}
+      data-event-name={event_name}
+      data-canvas-id={canvas_id}
     >
       <canvas id={canvas_id}></canvas>
     </div>
@@ -94,7 +96,10 @@ defmodule PantheonWeb.Metrics.Components.MetricsChart do
     <script :type={Phoenix.LiveView.ColocatedHook} name={hook_name}>
       export default {
         mounted() {
-          this.handleEvent("<%= @event_name %>", (config) => {
+          const eventName = this.el.dataset.eventName;
+          const canvasId = this.el.dataset.canvasId;
+
+          this.handleEvent(eventName, (config) => {
             if (this.chart) {
               this.updateChart(config);
             } else {
@@ -102,11 +107,11 @@ defmodule PantheonWeb.Metrics.Components.MetricsChart do
             }
           });
 
-          this.pushEvent("<%= @event_name %>");
+          this.pushEvent(eventName);
         },
 
         initChart(config) {
-          const ctx = document.getElementById('<%= @canvas_id %>').getContext('2d');
+          const ctx = document.getElementById(this.el.dataset.canvasId).getContext('2d');
           this.chart = new Chart(ctx, config);
         },
 

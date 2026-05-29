@@ -26,3 +26,4 @@ jobs:
 
           docker build -q -t "${IMAGE}:${TAG}" .
           docker push "${IMAGE}:${TAG}"
+          echo "new image ${IMAGE}:${TAG}"

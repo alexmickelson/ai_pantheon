@@ -1,0 +1,9 @@
+deps
+_build
+*.cache
+.elixir_ls
+.git
+test
+config/dev.exs
+config/test.exs
+erl_crash.dump

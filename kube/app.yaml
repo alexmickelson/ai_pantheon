@@ -1,0 +1,114 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secret
+  namespace: pantheon
+type: Opaque
+stringData:
+  SECRET_KEY_BASE: "" # generate with `mix phx.gen.secret` and fill in
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: pantheon
+data:
+  PORT: "4000"
+  PHX_HOST: "gateway.example.com"
+  POOL_SIZE: "5"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pantheon
+  namespace: pantheon
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pantheon
+  template:
+    metadata:
+      labels:
+        app: pantheon
+    spec:
+      containers:
+        - name: pantheon
+          image: ghcr.io/${{ GITHUB_REPOSITORY_OWNER }}/pantheon-gateway:latest
+          ports:
+            - containerPort: 4000
+              name: http
+          envFrom:
+            - secretRef:
+                name: app-secret
+            - configMapRef:
+                name: app-config
+          env:
+            - name: DATABASE_URL
+              value: "ecto://pantheon_user:pantheon_pass@postgres:5432/pantheon_prod"
+            - name: PHX_SERVER
+              value: "true"
+            - name: OIDC_ISSUER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: OIDC_ISSUER
+            - name: OIDC_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: OIDC_CLIENT_ID
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 4000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 4000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pantheon
+  namespace: pantheon
+spec:
+  selector:
+    app: pantheon
+  ports:
+    - port: 4000
+      targetPort: 4000
+      name: http
+
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: pantheon
+  namespace: pantheon
+spec:
+  parentRefs:
+    - name: pantheon-gateway
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: pantheon
+          port: 4000

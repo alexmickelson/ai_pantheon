@@ -37,7 +37,7 @@ spec:
     spec:
       containers:
         - name: pantheon
-          image: ghcr.io/${{ GITHUB_REPOSITORY_OWNER }}/pantheon-gateway:latest
+          image: ghcr.io/alexmickelson/pantheon-gateway:latest
           ports:
             - containerPort: 4000
               name: http

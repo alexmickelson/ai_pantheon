@@ -46,7 +46,15 @@ defmodule Pantheon.Data.CompletionMetricsDB do
       label: Zoi.string(),
       requests: Zoi.integer(),
       avg_latency_ms: Zoi.nullish(Zoi.float()),
+      min_latency_ms: Zoi.nullish(Zoi.float()),
+      max_latency_ms: Zoi.nullish(Zoi.float()),
       total_tokens: Zoi.integer(),
+      total_prompt_tokens: Zoi.nullish(Zoi.integer()),
+      total_completion_tokens: Zoi.nullish(Zoi.integer()),
+      cached_tokens: Zoi.nullish(Zoi.integer()),
+      avg_predicted_ms: Zoi.nullish(Zoi.float()),
+      avg_prediction_throughput: Zoi.nullish(Zoi.float()),
+      avg_draft_accepted: Zoi.nullish(Zoi.float()),
       error_count: Zoi.integer()
     })
   end
@@ -139,20 +147,23 @@ defmodule Pantheon.Data.CompletionMetricsDB do
   def aggregate_by_provider(hours \\ 24) do
     sql = """
     SELECT cm.provider_id, p.name AS provider_name, cm.model,
-           COUNT(*) AS request_count,
-           AVG(cm.response_latency_ms) AS avg_response_latency_ms,
-           MIN(cm.response_latency_ms) AS min_response_latency_ms,
-           MAX(cm.response_latency_ms) AS max_response_latency_ms,
-           SUM(cm.prompt_tokens) AS total_prompt_tokens,
-           SUM(cm.completion_tokens) AS total_completion_tokens,
-           AVG(cm.prompt_per_second) AS avg_prompt_throughput,
-           AVG(cm.predicted_per_second) AS avg_generation_throughput,
+           COUNT(*) AS requests,
+           AVG(cm.response_latency_ms) AS avg_latency_ms,
+           MIN(cm.response_latency_ms) AS min_latency_ms,
+           MAX(cm.response_latency_ms) AS max_latency_ms,
+           COALESCE(SUM(cm.total_tokens), 0) AS total_tokens,
+           COALESCE(SUM(cm.prompt_tokens), 0) AS total_prompt_tokens,
+           COALESCE(SUM(cm.completion_tokens), 0) AS total_completion_tokens,
+           COALESCE(SUM(cm.cached_tokens), 0) AS cached_tokens,
+           AVG(cm.predicted_ms) AS avg_predicted_ms,
+           AVG(cm.predicted_per_second) AS avg_prediction_throughput,
+           AVG(CASE WHEN cm.draft_n > 0 THEN cm.draft_n_accepted::float / cm.draft_n * 100 ELSE NULL END) AS avg_draft_accepted,
            COUNT(CASE WHEN cm.error_message IS NOT NULL THEN 1 END) AS error_count
     FROM completion_metrics cm
     LEFT JOIN ai_providers p ON p.id = cm.provider_id
     WHERE cm.inserted_at >= NOW() - INTERVAL '1 hour' * $(hours)
     GROUP BY cm.provider_id, p.name, cm.model
-    ORDER BY request_count DESC
+    ORDER BY requests DESC
     """
 
     case DbHelpers.run_sql(sql, %{"hours" => hours}) do
@@ -199,7 +210,15 @@ defmodule Pantheon.Data.CompletionMetricsDB do
     SELECT cm.model AS label,
            COUNT(*) AS requests,
            AVG(cm.response_latency_ms) AS avg_latency_ms,
+           MIN(cm.response_latency_ms) AS min_latency_ms,
+           MAX(cm.response_latency_ms) AS max_latency_ms,
            COALESCE(SUM(cm.total_tokens), 0) AS total_tokens,
+           COALESCE(SUM(cm.prompt_tokens), 0) AS total_prompt_tokens,
+           COALESCE(SUM(cm.completion_tokens), 0) AS total_completion_tokens,
+           COALESCE(SUM(cm.cached_tokens), 0) AS cached_tokens,
+           AVG(cm.predicted_ms) AS avg_predicted_ms,
+           AVG(cm.predicted_per_second) AS avg_prediction_throughput,
+           AVG(CASE WHEN cm.draft_n > 0 THEN cm.draft_n_accepted::float / cm.draft_n * 100 ELSE NULL END) AS avg_draft_accepted,
            COUNT(CASE WHEN cm.error_message IS NOT NULL THEN 1 END) AS error_count
     FROM completion_metrics cm
     WHERE cm.inserted_at >= NOW() - INTERVAL '1 hour' * $(hours)
@@ -222,7 +241,15 @@ defmodule Pantheon.Data.CompletionMetricsDB do
     SELECT u.email AS label,
            COUNT(*) AS requests,
            AVG(cm.response_latency_ms) AS avg_latency_ms,
+           MIN(cm.response_latency_ms) AS min_latency_ms,
+           MAX(cm.response_latency_ms) AS max_latency_ms,
            COALESCE(SUM(cm.total_tokens), 0) AS total_tokens,
+           COALESCE(SUM(cm.prompt_tokens), 0) AS total_prompt_tokens,
+           COALESCE(SUM(cm.completion_tokens), 0) AS total_completion_tokens,
+           COALESCE(SUM(cm.cached_tokens), 0) AS cached_tokens,
+           AVG(cm.predicted_ms) AS avg_predicted_ms,
+           AVG(cm.predicted_per_second) AS avg_prediction_throughput,
+           AVG(CASE WHEN cm.draft_n > 0 THEN cm.draft_n_accepted::float / cm.draft_n * 100 ELSE NULL END) AS avg_draft_accepted,
            COUNT(CASE WHEN cm.error_message IS NOT NULL THEN 1 END) AS error_count
     FROM completion_metrics cm
     INNER JOIN users u ON u.id = cm.user_id
@@ -247,7 +274,15 @@ defmodule Pantheon.Data.CompletionMetricsDB do
     SELECT COALESCE(uak.name, uak.key_prefix) AS label,
            COUNT(*) AS requests,
            AVG(cm.response_latency_ms) AS avg_latency_ms,
+           MIN(cm.response_latency_ms) AS min_latency_ms,
+           MAX(cm.response_latency_ms) AS max_latency_ms,
            COALESCE(SUM(cm.total_tokens), 0) AS total_tokens,
+           COALESCE(SUM(cm.prompt_tokens), 0) AS total_prompt_tokens,
+           COALESCE(SUM(cm.completion_tokens), 0) AS total_completion_tokens,
+           COALESCE(SUM(cm.cached_tokens), 0) AS cached_tokens,
+           AVG(cm.predicted_ms) AS avg_predicted_ms,
+           AVG(cm.predicted_per_second) AS avg_prediction_throughput,
+           AVG(CASE WHEN cm.draft_n > 0 THEN cm.draft_n_accepted::float / cm.draft_n * 100 ELSE NULL END) AS avg_draft_accepted,
            COUNT(CASE WHEN cm.error_message IS NOT NULL THEN 1 END) AS error_count
     FROM completion_metrics cm
     INNER JOIN user_api_keys uak ON uak.id = cm.api_key_id

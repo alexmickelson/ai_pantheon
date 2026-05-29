@@ -16,7 +16,15 @@ defmodule PantheonWeb.Metrics.MetricsLive do
   @chart_metrics [
     {"Requests", :requests},
     {"Avg Latency (ms)", :avg_latency_ms},
+    {"Min Latency (ms)", :min_latency_ms},
+    {"Max Latency (ms)", :max_latency_ms},
     {"Total Tokens", :total_tokens},
+    {"Prompt Tokens", :total_prompt_tokens},
+    {"Completion Tokens", :total_completion_tokens},
+    {"Cached Tokens", :cached_tokens},
+    {"Avg Prediction (ms)", :avg_predicted_ms},
+    {"Prediction Throughput (t/s)", :avg_prediction_throughput},
+    {"Draft Acceptance (%)", :avg_draft_accepted},
     {"Errors", :error_count}
   ]
 
@@ -32,7 +40,8 @@ defmodule PantheonWeb.Metrics.MetricsLive do
      |> assign(:time_range, "24h")
      |> assign(:time_hours, 24)
      |> assign(:aggregation_tab, "Provider")
-     |> assign(:chart_metrics, MapSet.new(["Requests"]))
+     |> assign(:all_chart_metrics, @chart_metrics)
+     |> assign(:selected_chart_metrics, MapSet.new(["Requests"]))
      |> assign(:summary, %{})
      |> assign(:chart_data, [])}
   end
@@ -61,15 +70,15 @@ defmodule PantheonWeb.Metrics.MetricsLive do
   @impl true
   def handle_event("toggle_chart_metric", %{"metric" => metric}, socket) do
     new_metrics =
-      if MapSet.member?(socket.assigns.chart_metrics, metric) do
-        MapSet.delete(socket.assigns.chart_metrics, metric)
+      if MapSet.member?(socket.assigns.selected_chart_metrics, metric) do
+        MapSet.delete(socket.assigns.selected_chart_metrics, metric)
       else
-        MapSet.put(socket.assigns.chart_metrics, metric)
+        MapSet.put(socket.assigns.selected_chart_metrics, metric)
       end
 
     {:noreply,
      socket
-     |> assign(:chart_metrics, new_metrics)
+     |> assign(:selected_chart_metrics, new_metrics)
      |> load_data()
      |> push_chart_event()}
   end
@@ -84,7 +93,7 @@ defmodule PantheonWeb.Metrics.MetricsLive do
 
   @impl true
   def handle_event("get_chart_config", _params, socket) do
-    {:noreply, push_event(socket, "update_chart", build_chart_config(socket))}
+    {:noreply, push_event(socket, "get_chart_config", build_chart_config(socket))}
   end
 
   @impl true
@@ -130,8 +139,8 @@ defmodule PantheonWeb.Metrics.MetricsLive do
 
   defp push_chart_event(socket) do
     if not Enum.empty?(socket.assigns.chart_data) and
-         MapSet.size(socket.assigns.chart_metrics) > 0 do
-      push_event(socket, "update_chart", build_chart_config(socket))
+         MapSet.size(socket.assigns.selected_chart_metrics) > 0 do
+      push_event(socket, "get_chart_config", build_chart_config(socket))
     else
       socket
     end
@@ -142,11 +151,11 @@ defmodule PantheonWeb.Metrics.MetricsLive do
 
     datasets =
       for {display_name, key} <- @chart_metrics,
-          display_name in socket.assigns.chart_metrics,
+          display_name in socket.assigns.selected_chart_metrics,
           into: [] do
         values =
           Enum.map(socket.assigns.chart_data, fn row ->
-            row[key] || 0
+            Map.get(row, to_string(key), 0) || 0
           end)
 
         %{
@@ -185,8 +194,16 @@ defmodule PantheonWeb.Metrics.MetricsLive do
 
   defp dataset_color("Requests"), do: "rgba(59, 130, 246, 0.8)"
   defp dataset_color("Avg Latency (ms)"), do: "rgba(251, 146, 60, 0.8)"
+  defp dataset_color("Min Latency (ms)"), do: "rgba(139, 92, 246, 0.8)"
+  defp dataset_color("Max Latency (ms)"), do: "rgba(236, 72, 153, 0.8)"
   defp dataset_color("Total Tokens"), do: "rgba(34, 197, 94, 0.8)"
-  defp dataset_color("Errors"), do: "rgba(239, 68, 68, 0.8)"
+  defp dataset_color("Prompt Tokens"), do: "rgba(6, 182, 212, 0.8)"
+  defp dataset_color("Completion Tokens"), do: "rgba(234, 179, 8, 0.8)"
+  defp dataset_color("Cached Tokens"), do: "rgba(244, 63, 94, 0.8)"
+  defp dataset_color("Avg Prediction (ms)"), do: "rgba(168, 85, 247, 0.8)"
+  defp dataset_color("Prediction Throughput (t/s)"), do: "rgba(239, 68, 68, 0.8)"
+  defp dataset_color("Draft Acceptance (%)"), do: "rgba(14, 165, 233, 0.8)"
+  defp dataset_color("Errors"), do: "rgba(220, 38, 38, 0.8)"
 
   @impl true
   def render(assigns) do
@@ -285,13 +302,13 @@ defmodule PantheonWeb.Metrics.MetricsLive do
 
         <div class="flex items-center gap-4 ml-auto">
           <span class="text-xs font-medium text-slate-500 uppercase tracking-wider">Show:</span>
-          <%= for {display_name, _key} <- @chart_metrics do %>
+          <%= for {display_name, _key} <- @all_chart_metrics do %>
             <label class="flex items-center gap-2 cursor-pointer group">
               <input
                 type="checkbox"
-                phx-change="toggle_chart_metric"
+                phx-click="toggle_chart_metric"
                 phx-value-metric={display_name}
-                checked={display_name in @chart_metrics}
+                checked={display_name in @selected_chart_metrics}
                 class="w-4 h-4 rounded border-slate-600 bg-slate-800 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
               />
               <span class="text-sm text-slate-400 group-hover:text-slate-200 transition-colors">

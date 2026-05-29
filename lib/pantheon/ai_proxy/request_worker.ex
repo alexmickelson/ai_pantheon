@@ -3,8 +3,6 @@ defmodule Pantheon.AiProxy.RequestWorker do
 
   alias Pantheon.AiProxy.CompletionMetrics
 
-  @stream_timeout 30_000
-
   @type request_data :: %{
           user_id: binary() | nil,
           api_key_id: binary() | nil,
@@ -133,17 +131,6 @@ defmodule Pantheon.AiProxy.RequestWorker do
           :unknown ->
             stream_loop(resp, client_pid, final_chunks)
         end
-    after
-      @stream_timeout ->
-        Req.cancel_async_response(resp)
-        Logger.warning("Timeout waiting for stream response from provider endpoint")
-
-        send(
-          client_pid,
-          {:proxy_stream_error, "Provider endpoint did not respond within timeout"}
-        )
-
-        final_chunks
     end
   end
 

@@ -1,13 +1,15 @@
 ---
-apiVersion: v1
-kind: Secret
-metadata:
-  name: app-secret
-  namespace: pantheon
-type: Opaque
-stringData:
-  SECRET_KEY_BASE: "" # generate with `mix phx.gen.secret` and fill in
-
+# will need to be created by user
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: app-secret
+#   namespace: pantheon
+# type: Opaque
+# stringData:
+#   SECRET_KEY_BASE: ""
+#   OIDC_ISSUER: ""
+#   OIDC_CLIENT_ID: ""
 ---
 apiVersion: v1
 kind: ConfigMap

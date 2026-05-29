@@ -16,7 +16,25 @@ defmodule PantheonWeb.Proxy.V1Controller do
             id: model_id,
             object: "model",
             created: 0,
-            owned_by: provider.name
+            owned_by: provider.name,
+            permission: [
+              %{
+                id: "#{provider.id}_perm_#{model_id}",
+                object: "model_permission",
+                created: 0,
+                allow_create_engine: false,
+                allow_sampling: true,
+                allow_logprobs: true,
+                allow_search_indices: false,
+                allow_view: true,
+                allow_fine_tuning: false,
+                organization: "*",
+                group: nil,
+                is_blocking: false
+              }
+            ],
+            root: model_id,
+            parent: nil
           }
         end)
       end)

@@ -37,7 +37,7 @@ COPY assets ./assets
 RUN mix assets.deploy
 RUN mix release
 
-FROM docker.io/debian:${DEBIAN_SLIM} AS app
+FROM docker.io/library/debian:bookworm AS app
 
 ARG MIX_ENV
 

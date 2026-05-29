@@ -26,7 +26,7 @@ metadata:
   name: pantheon
   namespace: pantheon
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: pantheon

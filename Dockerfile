@@ -1,5 +1,6 @@
 ARG ELIXIR_VERSION=1.19.5
 ARG OTP_VERSION=28
+ARG ALPINE_VERSION=3.23
 ARG MIX_ENV=prod
 
 # Build stage: Alpine for musl-compatible release
@@ -35,7 +36,7 @@ COPY assets ./assets
 RUN mix assets.deploy
 RUN mix release
 
-FROM docker.io/library/alpine:3.21 AS app
+FROM docker.io/library/alpine:${ALPINE_VERSION} AS app
 
 ARG MIX_ENV
 

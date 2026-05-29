@@ -21,16 +21,8 @@ defmodule PantheonWeb.AuthController do
   def client_id,
     do: Application.fetch_env!(:pantheon, :oidc) |> Keyword.fetch!(:client_id)
 
-  def callback_uri(conn) do
-    case Application.fetch_env!(:pantheon, :oidc) |> Keyword.get(:redirect_uri) do
-      uri when is_binary(uri) ->
-        uri
-
-      nil ->
-        default_port = URI.default_port(to_string(conn.scheme))
-        port_str = if conn.port == default_port, do: "", else: ":#{conn.port}"
-        "#{conn.scheme}://#{conn.host}#{port_str}/auth/callback"
-    end
+  def callback_uri(_conn) do
+    Application.fetch_env!(:pantheon, :oidc) |> Keyword.fetch!(:redirect_uri)
   end
 
   @pkce_profile_opts %{require_pkce: true}

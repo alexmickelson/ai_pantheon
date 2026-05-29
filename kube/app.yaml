@@ -19,6 +19,7 @@ metadata:
 data:
   PORT: "4000"
   PHX_HOST: "gateway.example.com"
+  OIDC_REDIRECT_URI: "http://gateway.example.com"
   POOL_SIZE: "5"
 
 ---

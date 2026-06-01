@@ -33,7 +33,7 @@ spec:
   selector:
     matchLabels:
       app: pantheon
-  deploymentStrategy:
+  strategy:
     type: RollingUpdate
     rollingUpdate:
       maxUnavailable: 0

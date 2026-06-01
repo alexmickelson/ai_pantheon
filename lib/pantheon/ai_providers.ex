@@ -32,6 +32,10 @@ defmodule Pantheon.AIProviders do
     GenServer.call(__MODULE__, {:delete, provider_id})
   end
 
+  def refresh_models(provider_id) do
+    GenServer.call(__MODULE__, {:refresh_models, provider_id})
+  end
+
   @impl true
   def init(_opts) do
     Task.Supervisor.async_nolink(Pantheon.AIProviders.TaskSupervisor, fn ->
@@ -103,6 +107,18 @@ defmodule Pantheon.AIProviders do
 
       {:error, reason} ->
         {:reply, {:error, reason}, state}
+    end
+  end
+
+  @impl true
+  def handle_call({:refresh_models, provider_id}, _from, %__MODULE__{} = state) do
+    case Enum.find(state.providers, &(&1.id == provider_id)) do
+      nil ->
+        {:reply, {:error, "Provider not found"}, state}
+
+      provider ->
+        new_state = spawn_model_fetch(state, provider)
+        {:reply, :ok, new_state}
     end
   end
 

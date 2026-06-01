@@ -97,6 +97,16 @@ defmodule PantheonWeb.Settings.ProvidersListComponent do
      |> stream(:providers, providers, reset: true)}
   end
 
+  def handle_event("refresh_models", %{"id" => id}, socket) do
+    case AIProviders.refresh_models(id) do
+      :ok ->
+        {:noreply, socket}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to refresh models: #{inspect(reason)}")}
+    end
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -147,6 +157,17 @@ defmodule PantheonWeb.Settings.ProvidersListComponent do
                           Deny
                         </button>
                       <% else %>
+                        <button
+                          type="button"
+                          phx-click="refresh_models"
+                          phx-value-id={provider.id}
+                          phx-target={@myself}
+                          class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors bg-blue-900/50 text-blue-200"
+                          title="Refresh models list"
+                        >
+                          <.icon name="hero-arrow-path" class="h-3.5 w-3.5" />
+                        </button>
+
                         <button
                           type="button"
                           phx-click="edit"

@@ -32,8 +32,8 @@ defmodule Pantheon.AIProviders do
     GenServer.call(__MODULE__, {:delete, provider_id})
   end
 
-  def refresh_models(provider_id) do
-    GenServer.call(__MODULE__, {:refresh_models, provider_id})
+  def refresh_models(provider_id, user_id) do
+    GenServer.call(__MODULE__, {:refresh_models, provider_id, user_id})
   end
 
   @impl true
@@ -111,13 +111,13 @@ defmodule Pantheon.AIProviders do
   end
 
   @impl true
-  def handle_call({:refresh_models, provider_id}, _from, %__MODULE__{} = state) do
+  def handle_call({:refresh_models, provider_id, user_id}, _from, %__MODULE__{} = state) do
     case Enum.find(state.providers, &(&1.id == provider_id)) do
       nil ->
         {:reply, {:error, "Provider not found"}, state}
 
       provider ->
-        new_state = spawn_model_fetch(state, provider)
+        new_state = spawn_model_fetch(state, provider, user_id)
         {:reply, :ok, new_state}
     end
   end
@@ -193,7 +193,7 @@ defmodule Pantheon.AIProviders do
     end
   end
 
-  defp spawn_model_fetch(%__MODULE__{} = state, provider) do
+  defp spawn_model_fetch(%__MODULE__{} = state, provider, user_id \\ nil) do
     provider_id = provider.id
 
     task =
@@ -203,7 +203,13 @@ defmodule Pantheon.AIProviders do
             Enum.map(fetched, & &1.id)
 
           {:error, reason} ->
-            Logger.warning("Could not fetch models for provider #{provider.name}: #{reason}")
+            error_msg = "Could not fetch models for provider '#{provider.name}': #{reason}"
+            Logger.warning(error_msg)
+
+            if user_id do
+              Pantheon.UserErrorNotifier.broadcast_error(user_id, error_msg)
+            end
+
             []
         end
       end)

@@ -98,7 +98,7 @@ defmodule PantheonWeb.Settings.ProvidersListComponent do
   end
 
   def handle_event("refresh_models", %{"id" => id}, socket) do
-    case AIProviders.refresh_models(id) do
+    case AIProviders.refresh_models(id, socket.assigns.user_id) do
       :ok ->
         {:noreply, socket}
 

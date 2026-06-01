@@ -10,6 +10,7 @@ never silently ignore errors. make sure that errors properly get displayed to th
 
 avoid empty catch-all clauses that hide errors
 
+
 Phoenix connects to Postgres via `Ecto.Repo` (no Ecto schemas). All queries use `DbHelpers.run_sql/2,3` with named parameters (`$(param_name)`), which are converted to positional Postgrex params at runtime. Query results are optionally validated against a Zoi schema.
 
 **SQL is only allowed in `*_db.ex` files under `lib/pantheon/data/`.** GenServers, LiveViews, controllers, and other modules must never contain raw SQL — they delegate to the corresponding `*DB` module for all database access.
@@ -31,6 +32,11 @@ use pattern matching on function parameters to enforce required structure
 
 make plans when making large changes. when making plans, ask questions to the user when there are ambiguous requirements that need clarification
 
+
+
+### Error Handling - Getting Errors to the User Interface
+
+GenServers/tasks broadcast errors via `Pantheon.UserErrorNotifier.broadcast_error(user_id, message)`. LiveViews subscribe to `"user_error:#{user_id}"` and handle `{:error_broadcast, message}` to display toasts. The user_id scopes errors so each user only receives their own.
 
 ---
 

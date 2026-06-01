@@ -54,6 +54,8 @@ defmodule Pantheon.Data.CompletionMetricsDB do
       cached_tokens: Zoi.nullish(Zoi.integer()),
       avg_predicted_ms: Zoi.nullish(Zoi.float()),
       avg_prediction_throughput: Zoi.nullish(Zoi.float()),
+      avg_prompt_throughput: Zoi.nullish(Zoi.float()),
+      cache_rate: Zoi.nullish(Zoi.float()),
       avg_draft_accepted: Zoi.nullish(Zoi.float()),
       error_count: Zoi.integer()
     })
@@ -155,8 +157,10 @@ defmodule Pantheon.Data.CompletionMetricsDB do
            COALESCE(SUM(cm.prompt_tokens), 0) AS total_prompt_tokens,
            COALESCE(SUM(cm.completion_tokens), 0) AS total_completion_tokens,
            COALESCE(SUM(cm.cached_tokens), 0) AS cached_tokens,
+           AVG(CASE WHEN cm.prompt_tokens > 0 THEN cm.cached_tokens::float / cm.prompt_tokens * 100 ELSE NULL END) AS cache_rate,
            AVG(cm.predicted_ms) AS avg_predicted_ms,
            AVG(cm.predicted_per_second) AS avg_prediction_throughput,
+           AVG(cm.prompt_per_second) AS avg_prompt_throughput,
            AVG(CASE WHEN cm.draft_n > 0 THEN cm.draft_n_accepted::float / cm.draft_n * 100 ELSE NULL END) AS avg_draft_accepted,
            COUNT(CASE WHEN cm.error_message IS NOT NULL THEN 1 END) AS error_count
     FROM completion_metrics cm
@@ -216,8 +220,10 @@ defmodule Pantheon.Data.CompletionMetricsDB do
            COALESCE(SUM(cm.prompt_tokens), 0) AS total_prompt_tokens,
            COALESCE(SUM(cm.completion_tokens), 0) AS total_completion_tokens,
            COALESCE(SUM(cm.cached_tokens), 0) AS cached_tokens,
+           AVG(CASE WHEN cm.prompt_tokens > 0 THEN cm.cached_tokens::float / cm.prompt_tokens * 100 ELSE NULL END) AS cache_rate,
            AVG(cm.predicted_ms) AS avg_predicted_ms,
            AVG(cm.predicted_per_second) AS avg_prediction_throughput,
+           AVG(cm.prompt_per_second) AS avg_prompt_throughput,
            AVG(CASE WHEN cm.draft_n > 0 THEN cm.draft_n_accepted::float / cm.draft_n * 100 ELSE NULL END) AS avg_draft_accepted,
            COUNT(CASE WHEN cm.error_message IS NOT NULL THEN 1 END) AS error_count
     FROM completion_metrics cm
@@ -247,8 +253,10 @@ defmodule Pantheon.Data.CompletionMetricsDB do
            COALESCE(SUM(cm.prompt_tokens), 0) AS total_prompt_tokens,
            COALESCE(SUM(cm.completion_tokens), 0) AS total_completion_tokens,
            COALESCE(SUM(cm.cached_tokens), 0) AS cached_tokens,
+           AVG(CASE WHEN cm.prompt_tokens > 0 THEN cm.cached_tokens::float / cm.prompt_tokens * 100 ELSE NULL END) AS cache_rate,
            AVG(cm.predicted_ms) AS avg_predicted_ms,
            AVG(cm.predicted_per_second) AS avg_prediction_throughput,
+           AVG(cm.prompt_per_second) AS avg_prompt_throughput,
            AVG(CASE WHEN cm.draft_n > 0 THEN cm.draft_n_accepted::float / cm.draft_n * 100 ELSE NULL END) AS avg_draft_accepted,
            COUNT(CASE WHEN cm.error_message IS NOT NULL THEN 1 END) AS error_count
     FROM completion_metrics cm
@@ -280,8 +288,10 @@ defmodule Pantheon.Data.CompletionMetricsDB do
            COALESCE(SUM(cm.prompt_tokens), 0) AS total_prompt_tokens,
            COALESCE(SUM(cm.completion_tokens), 0) AS total_completion_tokens,
            COALESCE(SUM(cm.cached_tokens), 0) AS cached_tokens,
+           AVG(CASE WHEN cm.prompt_tokens > 0 THEN cm.cached_tokens::float / cm.prompt_tokens * 100 ELSE NULL END) AS cache_rate,
            AVG(cm.predicted_ms) AS avg_predicted_ms,
            AVG(cm.predicted_per_second) AS avg_prediction_throughput,
+           AVG(cm.prompt_per_second) AS avg_prompt_throughput,
            AVG(CASE WHEN cm.draft_n > 0 THEN cm.draft_n_accepted::float / cm.draft_n * 100 ELSE NULL END) AS avg_draft_accepted,
            COUNT(CASE WHEN cm.error_message IS NOT NULL THEN 1 END) AS error_count
     FROM completion_metrics cm
@@ -298,6 +308,39 @@ defmodule Pantheon.Data.CompletionMetricsDB do
 
       {:error, reason} ->
         Logger.error("Failed to query completion metrics by api key: #{inspect(reason)}")
+        []
+    end
+  end
+
+  def timeline_tokens_by_model(hours \\ 24) do
+    bucket_minutes =
+      cond do
+        hours <= 6 -> 15
+        hours <= 24 -> 60
+        true -> 360
+      end
+
+    sql = """
+    SELECT
+      to_timestamp(
+        (extract(epoch from date_trunc('minute', cm.inserted_at))::bigint / $(bucket)::bigint) * $(bucket)::bigint
+      ) AS time_bucket,
+      cm.model,
+      COALESCE(SUM(cm.completion_tokens), 0) AS completion_tokens,
+      COALESCE(SUM(cm.prompt_tokens), 0) AS prompt_tokens,
+      COALESCE(SUM(cm.cached_tokens), 0) AS cached_tokens
+    FROM completion_metrics cm
+    WHERE cm.inserted_at >= NOW() - INTERVAL '1 hour' * $(hours)
+    GROUP BY time_bucket, cm.model
+    ORDER BY time_bucket ASC
+    """
+
+    case DbHelpers.run_sql(sql, %{"hours" => hours, "bucket" => bucket_minutes * 60}) do
+      results when is_list(results) ->
+        results
+
+      {:error, reason} ->
+        Logger.error("Failed to query token timeline by model: #{inspect(reason)}")
         []
     end
   end

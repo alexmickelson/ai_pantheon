@@ -34,16 +34,14 @@ defmodule Pantheon.AIProviders do
 
   @impl true
   def init(_opts) do
-    parent = self()
-
-    Task.async(fn ->
-      providers = AIProviderDB.load_all_for_cache()
-      send(parent, {:db_loaded, providers})
+    Task.Supervisor.async_nolink(Pantheon.AIProviders.TaskSupervisor, fn ->
+      {:db_loaded, AIProviderDB.load_all_for_cache()}
     end)
 
     {:ok, %__MODULE__{}}
   end
 
+  @impl true
   def handle_call(:list, _from, %__MODULE__{} = state) do
     {:reply, state.providers, state}
   end
@@ -53,10 +51,13 @@ defmodule Pantheon.AIProviders do
     case AIProviderDB.create(attrs) do
       {:ok, provider} ->
         provider_with_models = Map.put(provider, :models, [])
-        new_state = %__MODULE__{state | providers: [provider_with_models | state.providers]}
 
-        spawn_model_fetch(new_state, provider)
+        state_with_provider = %__MODULE__{
+          state
+          | providers: [provider_with_models | state.providers]
+        }
 
+        new_state = spawn_model_fetch(state_with_provider, provider)
         broadcast(:provider_created, provider_with_models)
         {:reply, {:ok, provider_with_models}, new_state}
 
@@ -65,12 +66,13 @@ defmodule Pantheon.AIProviders do
     end
   end
 
+  @impl true
   def handle_call({:update, provider_id, attrs}, _from, %__MODULE__{} = state) do
     case AIProviderDB.update(provider_id, attrs) do
       {:ok, provider} ->
         provider_with_models = Map.put(provider, :models, [])
 
-        new_state = %__MODULE__{
+        state_with_provider = %__MODULE__{
           state
           | providers:
               Enum.map(state.providers, fn p ->
@@ -78,8 +80,7 @@ defmodule Pantheon.AIProviders do
               end)
         }
 
-        spawn_model_fetch(new_state, provider)
-
+        new_state = spawn_model_fetch(state_with_provider, provider)
         broadcast(:provider_updated, provider_with_models)
         {:reply, {:ok, provider_with_models}, new_state}
 
@@ -88,6 +89,7 @@ defmodule Pantheon.AIProviders do
     end
   end
 
+  @impl true
   def handle_call({:delete, provider_id}, _from, %__MODULE__{} = state) do
     case AIProviderDB.delete(provider_id) do
       :ok ->
@@ -109,64 +111,48 @@ defmodule Pantheon.AIProviders do
   end
 
   @impl true
-  def handle_info({:db_loaded, providers}, %__MODULE__{} = state) do
+  def handle_info({ref, {:db_loaded, providers}}, %__MODULE__{} = state) when is_reference(ref) do
+    Process.demonitor(ref, [:flush])
     with_empty_models = Enum.map(providers, &Map.put(&1, :models, []))
 
-    for provider <- providers do
-      spawn_model_fetch(state, provider)
+    new_state =
+      Enum.reduce(providers, %__MODULE__{state | providers: with_empty_models}, fn provider,
+                                                                                   acc ->
+        spawn_model_fetch(acc, provider)
+      end)
+
+    {:noreply, new_state}
+  end
+
+  def handle_info({ref, models}, %__MODULE__{} = state)
+      when is_reference(ref) and is_list(models) do
+    Process.demonitor(ref, [:flush])
+
+    case Map.pop(state.pending_model_fetches, ref) do
+      {nil, _} ->
+        {:noreply, state}
+
+      {provider_id, remaining_fetches} ->
+        new_state =
+          %__MODULE__{state | pending_model_fetches: remaining_fetches}
+          |> apply_fetched_models(provider_id, models)
+
+        {:noreply, new_state}
     end
-
-    {:noreply, %__MODULE__{state | providers: with_empty_models}}
-  end
-
-  def handle_info({_ref, {:db_loaded, providers}}, %__MODULE__{} = state) do
-    handle_info({:db_loaded, providers}, state)
-  end
-
-  def handle_info({:DOWN, ref, :process, _pid, :normal}, %__MODULE__{} = state) do
-    {:noreply,
-     %__MODULE__{state | pending_model_fetches: Map.delete(state.pending_model_fetches, ref)}}
   end
 
   def handle_info({:DOWN, ref, :process, _pid, reason}, %__MODULE__{} = state) do
     case Map.pop(state.pending_model_fetches, ref) do
-      {nil, ^state} ->
+      {nil, _} ->
         {:noreply, state}
 
-      {{%{provider_id: provider_id}}, new_state} ->
+      {provider_id, remaining_fetches} ->
         Logger.warning(
-          "Model fetch task crashed for provider #{inspect(provider_id)} with reason: #{inspect(reason)}"
+          "Model fetch task exited unexpectedly for provider #{inspect(provider_id)}: #{inspect(reason)}"
         )
 
-        {:noreply, new_state}
-
-      {_, new_state} ->
-        {:noreply, new_state}
+        {:noreply, %__MODULE__{state | pending_model_fetches: remaining_fetches}}
     end
-  end
-
-  def handle_info({:models_fetched, provider_id, models}, %__MODULE__{} = state) do
-    case Enum.find(state.providers, &(&1.id == provider_id)) do
-      nil ->
-        {:noreply, state}
-
-      _provider ->
-        new_state = %__MODULE__{
-          state
-          | providers:
-              Enum.map(state.providers, fn p ->
-                if p.id == provider_id, do: Map.put(p, :models, models), else: p
-              end)
-        }
-
-        updated = Enum.find(new_state.providers, &(&1.id == provider_id))
-        broadcast(:provider_updated, updated)
-        {:noreply, new_state}
-    end
-  end
-
-  def handle_info({_ref, {:models_fetched, provider_id, models}}, %__MODULE__{} = state) do
-    handle_info({:models_fetched, provider_id, models}, state)
   end
 
   def handle_info(msg, %__MODULE__{} = state) do
@@ -174,31 +160,41 @@ defmodule Pantheon.AIProviders do
     {:noreply, state}
   end
 
-  defp spawn_model_fetch(state, provider) do
-    parent = self()
+  defp apply_fetched_models(%__MODULE__{} = state, provider_id, models) do
+    case Enum.find(state.providers, &(&1.id == provider_id)) do
+      nil ->
+        state
+
+      _provider ->
+        new_providers =
+          Enum.map(state.providers, fn p ->
+            if p.id == provider_id, do: Map.put(p, :models, models), else: p
+          end)
+
+        updated = Enum.find(new_providers, &(&1.id == provider_id))
+        broadcast(:provider_updated, updated)
+        %__MODULE__{state | providers: new_providers}
+    end
+  end
+
+  defp spawn_model_fetch(%__MODULE__{} = state, provider) do
     provider_id = provider.id
 
     task =
-      Task.async(fn ->
-        models =
-          case OpenAICompatible.fetch_models(provider.endpoint, provider.auth_token) do
-            {:ok, fetched} ->
-              Enum.map(fetched, & &1.id)
+      Task.Supervisor.async_nolink(Pantheon.AIProviders.TaskSupervisor, fn ->
+        case OpenAICompatible.fetch_models(provider.endpoint, provider.auth_token) do
+          {:ok, fetched} ->
+            Enum.map(fetched, & &1.id)
 
-            {:error, reason} ->
-              Logger.warning("Failed to fetch models for provider #{provider.name}: #{reason}")
-              []
-          end
-
-        send(parent, {:models_fetched, provider_id, models})
+          {:error, reason} ->
+            Logger.warning("Could not fetch models for provider #{provider.name}: #{reason}")
+            []
+        end
       end)
 
-    ref = Process.monitor(task.pid)
-
-    %{
+    %__MODULE__{
       state
-      | pending_model_fetches:
-          Map.put(state.pending_model_fetches, ref, %{provider_id: provider_id})
+      | pending_model_fetches: Map.put(state.pending_model_fetches, task.ref, provider_id)
     }
   end
 end

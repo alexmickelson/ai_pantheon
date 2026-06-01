@@ -9,11 +9,14 @@ defmodule Pantheon.Application do
   def start(_type, _args) do
     children =
       repo_children() ++
+        [
+          {Phoenix.PubSub, name: Pantheon.PubSub},
+          {Task.Supervisor, name: Pantheon.AIProviders.TaskSupervisor}
+        ] ++
         databaseChildren() ++
         [
           PantheonWeb.Telemetry,
           {DNSCluster, query: Application.get_env(:pantheon, :dns_cluster_query) || :ignore},
-          {Phoenix.PubSub, name: Pantheon.PubSub},
           {Task.Supervisor, name: Pantheon.AiProxy.TaskSupervisor},
           Pantheon.AiProxy.Router
         ] ++ oidc_children() ++ [PantheonWeb.Endpoint]

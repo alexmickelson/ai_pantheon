@@ -56,10 +56,10 @@ defmodule Pantheon.AiProxy.RequestWorker do
         :ok
 
       {:ok, %Req.Response{status: status, body: resp_body}}
-      when is_map(resp_body) and status >= 400 ->
+      when is_map(resp_body) and not is_struct(resp_body) and status >= 400 ->
         send(client_pid, {:proxy_stream_init, status})
         elapsed = System.monotonic_time(:millisecond) - start_time
-        error_detail = Map.get(resp_body, "detail", to_string(resp_body))
+        error_detail = Map.get(resp_body, "detail", inspect(resp_body))
 
         metrics =
           CompletionMetrics.from_error(
@@ -76,9 +76,30 @@ defmodule Pantheon.AiProxy.RequestWorker do
         report(metrics)
         :ok
 
+      {:ok, %Req.Response{status: status}} when status >= 400 ->
+        send(client_pid, {:proxy_stream_init, status})
+        elapsed = System.monotonic_time(:millisecond) - start_time
+        error_msg = "Provider returned HTTP #{status}"
+
+        metrics =
+          CompletionMetrics.from_error(
+            user_id,
+            api_key_id,
+            Map.get(provider, :id),
+            model,
+            status,
+            elapsed,
+            error_msg
+          )
+
+        send(client_pid, {:proxy_stream_error, error_msg})
+        report(metrics)
+        :ok
+
       {:error, reason} ->
         send(client_pid, {:proxy_stream_error, Exception.message(reason)})
         elapsed = System.monotonic_time(:millisecond) - start_time
+        error_msg = Exception.message(reason)
 
         metrics =
           CompletionMetrics.from_error(
@@ -88,7 +109,7 @@ defmodule Pantheon.AiProxy.RequestWorker do
             model,
             nil,
             elapsed,
-            to_string(reason)
+            error_msg
           )
 
         report(metrics)

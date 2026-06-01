@@ -36,7 +36,7 @@ make plans when making large changes. when making plans, ask questions to the us
 
 ### Error Handling - Getting Errors to the User Interface
 
-GenServers/tasks broadcast errors via `Pantheon.UserErrorNotifier.broadcast_error(user_id, message)`. LiveViews subscribe to `"user_error:#{user_id}"` and handle `{:error_broadcast, message}` to display toasts. The user_id scopes errors so each user only receives their own.
+GenServers/tasks broadcast errors via `Pantheon.UserErrorNotifier.broadcast_error(user_id, message)`. LiveViews subscribe to `"user_error:#{user_id}"` and handle `{:error_broadcast, message}` to display toasts. The user_id scopes errors so each user only receives their own. If errors occur for any user interaction, error messages need to make it back to the user.
 
 ---
 

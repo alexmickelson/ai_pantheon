@@ -58,6 +58,47 @@ defmodule Pantheon.AiProxy.CompletionMetrics do
     }
   end
 
+  def from_response(
+        user_id,
+        api_key_id,
+        provider_id,
+        model,
+        status_code,
+        elapsed_ms,
+        resp_body
+      ) do
+    usage = Map.get(resp_body, "usage", %{})
+    timings = Map.get(resp_body, "timings", %{})
+
+    extracted =
+      empty_metric_fields()
+      |> merge_usage(usage)
+      |> merge_timings(timings)
+      |> backfill_tokens_from_timings(timings)
+
+    %__MODULE__{
+      user_id: user_id,
+      api_key_id: api_key_id,
+      provider_id: provider_id,
+      model: model,
+      status_code: status_code,
+      response_latency_ms: elapsed_ms,
+      prompt_tokens: extracted[:prompt_tokens],
+      completion_tokens: extracted[:completion_tokens],
+      total_tokens: extracted[:total_tokens],
+      cached_tokens: extracted[:cached_tokens],
+      prompt_ms: extracted[:prompt_ms],
+      predicted_ms: extracted[:predicted_ms],
+      prompt_per_token_ms: extracted[:prompt_per_token_ms],
+      predicted_per_token_ms: extracted[:predicted_per_token_ms],
+      prompt_per_second: extracted[:prompt_per_second],
+      predicted_per_second: extracted[:predicted_per_second],
+      cache_n: extracted[:cache_n],
+      draft_n: extracted[:draft_n],
+      draft_n_accepted: extracted[:draft_n_accepted]
+    }
+  end
+
   def extract_metrics(chunks \\ [])
 
   def extract_metrics(nil), do: empty_metric_fields()

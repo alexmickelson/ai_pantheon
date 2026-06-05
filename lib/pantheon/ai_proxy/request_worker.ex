@@ -12,17 +12,27 @@ defmodule Pantheon.AiProxy.RequestWorker do
         }
 
   @spec run(request_data(), pid()) :: :ok
-  def run(
-        %{user_id: user_id, api_key_id: api_key_id, provider: provider, path: path, body: body} =
-          _request_data,
-        client_pid
-      ) do
+  def run(request_data, client_pid) do
     start_time = System.monotonic_time(:millisecond)
+    streaming? = Map.get(request_data.body, "stream", false)
 
+    if streaming? do
+      do_stream(request_data, client_pid, start_time)
+    else
+      do_request(request_data, client_pid, start_time)
+    end
+  end
+
+  defp do_stream(
+         %{user_id: user_id, api_key_id: api_key_id, provider: provider, path: path, body: body} =
+           _request_data,
+         client_pid,
+         start_time
+       ) do
     base_url = String.trim_trailing(provider.endpoint, "/")
-    existing_opts = Map.get(body, "stream_options", %{})
-    body = Map.put(body, "stream_options", Map.merge(%{"include_usage" => true}, existing_opts))
-    url = build_url(base_url, path, body)
+    model = Map.get(body, "model", "")
+
+    body = inject_stream_options(body)
 
     headers = [
       {"Authorization", "Bearer #{provider.auth_token}"},
@@ -30,15 +40,13 @@ defmodule Pantheon.AiProxy.RequestWorker do
       {"Accept", "text/event-stream"}
     ]
 
-    model = Map.get(body, "model", "")
+    url = build_url(base_url, path, body)
 
-    case Req.post(url, headers: headers, json: body, into: :self) do
+    case Req.post(url: url, headers: headers, json: body, into: :self) do
       {:ok, %Req.Response{status: 200} = resp} ->
         send(client_pid, {:proxy_stream_init, 200})
         final_chunks = stream_loop(resp, client_pid, [])
         elapsed_ms = System.monotonic_time(:millisecond) - start_time
-
-        log_final_response(final_chunks, model, Map.get(provider, :id))
 
         metrics =
           CompletionMetrics.from_stream(
@@ -57,7 +65,6 @@ defmodule Pantheon.AiProxy.RequestWorker do
 
       {:ok, %Req.Response{status: status, body: resp_body}}
       when is_map(resp_body) and not is_struct(resp_body) and status >= 400 ->
-        send(client_pid, {:proxy_stream_init, status})
         elapsed = System.monotonic_time(:millisecond) - start_time
         error_detail = Map.get(resp_body, "detail", inspect(resp_body))
 
@@ -72,12 +79,12 @@ defmodule Pantheon.AiProxy.RequestWorker do
             error_detail
           )
 
+        send(client_pid, {:proxy_stream_init, status})
         send(client_pid, {:proxy_stream_error, error_detail})
         report(metrics)
         :ok
 
       {:ok, %Req.Response{status: status}} when status >= 400 ->
-        send(client_pid, {:proxy_stream_init, status})
         elapsed = System.monotonic_time(:millisecond) - start_time
         error_msg = "Provider returned HTTP #{status}"
 
@@ -92,12 +99,12 @@ defmodule Pantheon.AiProxy.RequestWorker do
             error_msg
           )
 
+        send(client_pid, {:proxy_stream_init, status})
         send(client_pid, {:proxy_stream_error, error_msg})
         report(metrics)
         :ok
 
       {:error, reason} ->
-        send(client_pid, {:proxy_stream_error, Exception.message(reason)})
         elapsed = System.monotonic_time(:millisecond) - start_time
         error_msg = Exception.message(reason)
 
@@ -112,17 +119,112 @@ defmodule Pantheon.AiProxy.RequestWorker do
             error_msg
           )
 
+        send(client_pid, {:proxy_stream_error, error_msg})
         report(metrics)
         :ok
     end
   end
 
-  defp log_final_response([], _model, _provider_id) do
-    :ok
+  defp do_request(
+         %{user_id: user_id, api_key_id: api_key_id, provider: provider, path: path, body: body} =
+           _request_data,
+         client_pid,
+         start_time
+       ) do
+    base_url = String.trim_trailing(provider.endpoint, "/")
+    model = Map.get(body, "model", "")
+    url = "#{base_url}#{path}"
+
+    headers = [
+      {"Authorization", "Bearer #{provider.auth_token}"},
+      {"Content-Type", "application/json"}
+    ]
+
+    case Req.post(url: url, headers: headers, json: body) do
+      {:ok, %Req.Response{status: status, body: resp_body}}
+      when is_map(resp_body) and not is_struct(resp_body) ->
+        elapsed_ms = System.monotonic_time(:millisecond) - start_time
+
+        metrics =
+          if status >= 400 do
+            error_detail = Map.get(resp_body, "detail", inspect(resp_body))
+
+            CompletionMetrics.from_error(
+              user_id,
+              api_key_id,
+              Map.get(provider, :id),
+              model,
+              status,
+              elapsed_ms,
+              error_detail
+            )
+          else
+            CompletionMetrics.from_response(
+              user_id,
+              api_key_id,
+              Map.get(provider, :id),
+              model,
+              status,
+              elapsed_ms,
+              resp_body
+            )
+          end
+
+        send(client_pid, {:proxy_response, status, resp_body})
+        report(metrics)
+        :ok
+
+      {:ok, %Req.Response{status: status}} when status >= 400 ->
+        elapsed_ms = System.monotonic_time(:millisecond) - start_time
+        error_msg = "Provider returned HTTP #{status}"
+
+        metrics =
+          CompletionMetrics.from_error(
+            user_id,
+            api_key_id,
+            Map.get(provider, :id),
+            model,
+            status,
+            elapsed_ms,
+            error_msg
+          )
+
+        send(
+          client_pid,
+          {:proxy_response, status, %{error: %{message: error_msg, type: "api_error"}}}
+        )
+
+        report(metrics)
+        :ok
+
+      {:error, reason} ->
+        elapsed_ms = System.monotonic_time(:millisecond) - start_time
+        error_msg = Exception.message(reason)
+
+        metrics =
+          CompletionMetrics.from_error(
+            user_id,
+            api_key_id,
+            Map.get(provider, :id),
+            model,
+            nil,
+            elapsed_ms,
+            error_msg
+          )
+
+        send(
+          client_pid,
+          {:proxy_response, 503, %{error: %{message: error_msg, type: "api_error"}}}
+        )
+
+        report(metrics)
+        :ok
+    end
   end
 
-  defp log_final_response(_chunks, _model, _provider_id) do
-    :ok
+  defp inject_stream_options(body) do
+    existing_opts = Map.get(body, "stream_options", %{})
+    Map.put(body, "stream_options", Map.merge(%{"include_usage" => true}, existing_opts))
   end
 
   defp stream_loop(resp, client_pid, final_chunks) do

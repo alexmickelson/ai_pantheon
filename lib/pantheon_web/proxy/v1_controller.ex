@@ -109,27 +109,23 @@ defmodule PantheonWeb.Proxy.V1Controller do
 
   @spec stream_completion(Plug.Conn.t(), map(), map()) :: no_return()
   defp stream_completion(conn, provider, body_params) do
-    conn
-    |> put_resp_header("content-type", "text/event-stream")
-    |> put_resp_header("cache-control", "no-cache")
-    |> put_resp_header("connection", "keep-alive")
-    |> send_chunked(200)
-    |> then(&stream_loop(&1, provider, body_params))
+    streaming? = Map.get(body_params, "stream", false)
+
+    if streaming? do
+      conn
+      |> put_resp_header("content-type", "text/event-stream")
+      |> put_resp_header("cache-control", "no-cache")
+      |> put_resp_header("connection", "keep-alive")
+      |> send_chunked(200)
+      |> then(&dispatch_and_stream(&1, provider, body_params))
+    else
+      dispatch_and_respond(conn, provider, body_params)
+    end
   end
 
-  @spec stream_loop(Plug.Conn.t(), map(), map()) :: no_return()
-  defp stream_loop(conn, provider, body_params) do
-    request_data = %{
-      user_id: conn.assigns.current_api_key_user_id,
-      api_key_id: conn.assigns.current_api_key_id,
-      provider: %{
-        id: provider.id,
-        endpoint: provider.endpoint,
-        auth_token: provider.auth_token
-      },
-      path: "/v1/chat/completions",
-      body: body_params
-    }
+  @spec dispatch_and_stream(Plug.Conn.t(), map(), map()) :: no_return()
+  defp dispatch_and_stream(conn, provider, body_params) do
+    request_data = request_data(conn, provider, body_params)
 
     Pantheon.AiProxy.Router.dispatch(request_data, self())
 
@@ -161,6 +157,44 @@ defmodule PantheonWeb.Proxy.V1Controller do
         chunk(conn, "data: [DONE]\n\n")
         conn
     end
+  end
+
+  @spec dispatch_and_respond(Plug.Conn.t(), map(), map()) :: Plug.Conn.t()
+  defp dispatch_and_respond(conn, provider, body_params) do
+    request_data = request_data(conn, provider, body_params)
+
+    Pantheon.AiProxy.Router.dispatch(request_data, self())
+
+    receive do
+      {:proxy_response, status, body} ->
+        conn
+        |> put_resp_header("content-type", "application/json")
+        |> send_resp(status, Jason.encode!(body))
+    after
+      @stream_done_timeout ->
+        Logger.warning("Timeout waiting for proxy response")
+
+        conn
+        |> put_resp_header("content-type", "application/json")
+        |> send_resp(
+          503,
+          Jason.encode!(%{error: %{message: "Proxy response timeout", type: "api_error"}})
+        )
+    end
+  end
+
+  defp request_data(conn, provider, body_params) do
+    %{
+      user_id: conn.assigns.current_api_key_user_id,
+      api_key_id: conn.assigns.current_api_key_id,
+      provider: %{
+        id: provider.id,
+        endpoint: provider.endpoint,
+        auth_token: provider.auth_token
+      },
+      path: "/v1/chat/completions",
+      body: body_params
+    }
   end
 
   @spec stream_loop(Plug.Conn.t()) :: no_return()

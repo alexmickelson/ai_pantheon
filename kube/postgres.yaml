@@ -60,12 +60,12 @@ spec:
               memory: 512Mi
           livenessProbe:
             exec:
-              command: ["pg_isready", "-U", "$(POSTGRES_USER)"]
+              command: ["pg_isready"]
             initialDelaySeconds: 10
             periodSeconds: 10
           readinessProbe:
             exec:
-              command: ["pg_isready", "-U", "$(POSTGRES_USER)"]
+              command: ["pg_isready"]
             initialDelaySeconds: 5
             periodSeconds: 5
 

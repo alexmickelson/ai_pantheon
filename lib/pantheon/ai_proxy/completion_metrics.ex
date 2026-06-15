@@ -46,6 +46,29 @@ defmodule Pantheon.AiProxy.CompletionMetrics do
     }
   end
 
+  @spec from_error(any(), any(), any(), any(), any(), any(), any()) ::
+          %Pantheon.AiProxy.CompletionMetrics{
+            api_key_id: any(),
+            cache_n: nil,
+            cached_tokens: nil,
+            completion_tokens: nil,
+            draft_n: nil,
+            draft_n_accepted: nil,
+            error_message: any(),
+            model: any(),
+            predicted_ms: nil,
+            predicted_per_second: nil,
+            predicted_per_token_ms: nil,
+            prompt_ms: nil,
+            prompt_per_second: nil,
+            prompt_per_token_ms: nil,
+            prompt_tokens: nil,
+            provider_id: any(),
+            response_latency_ms: any(),
+            status_code: any(),
+            total_tokens: nil,
+            user_id: any()
+          }
   def from_error(user_id, api_key_id, provider_id, model, status_code, elapsed_ms, error_message) do
     %__MODULE__{
       user_id: user_id,

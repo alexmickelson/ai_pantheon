@@ -63,10 +63,11 @@ defmodule Pantheon.Data.CompletionMetricsDB do
 
   def insert(%Pantheon.AiProxy.CompletionMetrics{} = metrics) do
     atom_attrs = Map.from_struct(metrics)
+    sanitized = sanitize_timing_data(atom_attrs)
 
-    case Zoi.parse(schema(), atom_attrs) do
+    case Zoi.parse(schema(), sanitized) do
       {:ok, _validated} ->
-        string_attrs = to_string_keyed(atom_attrs)
+        string_attrs = to_string_keyed(sanitized)
         do_insert(string_attrs)
 
       {:error, errors} ->
@@ -75,6 +76,45 @@ defmodule Pantheon.Data.CompletionMetricsDB do
         )
 
         :ok
+    end
+  end
+
+  defp sanitize_timing_data(attrs) do
+    {attrs, predicted_reasons} =
+      case Map.get(attrs, :predicted_per_second) do
+        val when is_number(val) and val > 1000 ->
+          {Map.put(attrs, :predicted_per_second, nil),
+           ["predicted_per_second=#{val} exceeds 1000 t/s"]}
+
+        _ ->
+          {attrs, []}
+      end
+
+    {attrs, ms_reasons} =
+      case Map.get(attrs, :predicted_ms) do
+        val when is_number(val) and val < 100 ->
+          {attrs
+           |> Map.put(:predicted_ms, nil)
+           |> Map.put(:predicted_per_token_ms, nil)
+           |> Map.put(:predicted_per_second, nil), ["predicted_ms=#{val} is below 100ms minimum"]}
+
+        _ ->
+          {attrs, []}
+      end
+
+    reasons = predicted_reasons ++ ms_reasons
+
+    case reasons do
+      [] ->
+        attrs
+
+      _ ->
+        model = Map.get(attrs, :model)
+        message = "Sanitized timing data: #{Enum.join(reasons, "; ")}"
+
+        Logger.warning("Sanitizing implausible timing data for model '#{model}': #{message}")
+
+        Map.put(attrs, :error_message, message)
     end
   end
 
@@ -338,6 +378,7 @@ defmodule Pantheon.Data.CompletionMetricsDB do
     case DbHelpers.run_sql(sql, %{"hours" => hours, "bucket" => bucket_minutes * 60}) do
       results when is_list(results) ->
         results
+        |> DbHelpers.rows_apply_datetime_conversion([:time_bucket])
 
       {:error, reason} ->
         Logger.error("Failed to query token timeline by model: #{inspect(reason)}")

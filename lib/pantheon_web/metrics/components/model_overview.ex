@@ -1,13 +1,27 @@
 defmodule PantheonWeb.Metrics.Components.ModelOverview do
   @moduledoc """
   Renders a grid of model cards, each displaying aggregated completion metrics.
+  Fetches its own data from CompletionMetricsDB.
   """
-  use Phoenix.Component
+  use Phoenix.LiveComponent
 
-  attr :models, :list, required: true, doc: "list of model stat maps from aggregate_by_model"
-  attr :time_range, :string, default: "24h", doc: "human-readable time range label"
+  alias Pantheon.Data.CompletionMetricsDB
 
-  def model_overview(assigns) do
+  @impl true
+  def update(assigns, socket) do
+    {:ok,
+     socket
+     |> assign(assigns)
+     |> load_model_data()}
+  end
+
+  defp load_model_data(socket) do
+    data = CompletionMetricsDB.aggregate_by_model(socket.assigns.time_hours)
+    assign(socket, :models, data)
+  end
+
+  @impl true
+  def render(assigns) do
     ~H"""
     <div class="mb-8">
       <div class="flex items-center justify-between mb-4">
@@ -17,7 +31,7 @@ defmodule PantheonWeb.Metrics.Components.ModelOverview do
         </span>
       </div>
 
-      <%= if Enum.empty?(@models) do %>
+      <%= if is_nil(@models) || Enum.empty?(@models) do %>
         <div class="rounded-xl border border-dashed border-slate-800 bg-slate-900/30 p-8 text-center">
           <p class="text-sm text-slate-500">No models have been queried in this time period.</p>
         </div>
@@ -33,7 +47,6 @@ defmodule PantheonWeb.Metrics.Components.ModelOverview do
               </div>
 
               <dl class="grid grid-cols-2 gap-x-4 gap-y-3">
-                <!-- Throughput (most important) -->
                 <div class="flex items-baseline gap-1.5">
                   <dt class="text-xl font-bold text-white">
                     {format_throughput(model["avg_prediction_throughput"])}
@@ -47,8 +60,7 @@ defmodule PantheonWeb.Metrics.Components.ModelOverview do
                   </dt>
                   <dd class="text-xs text-slate-500 leading-none">prompt t/s</dd>
                 </div>
-                
-    <!-- Draft acceptance & cache rate -->
+
                 <div class="flex items-baseline gap-1.5">
                   <dt class="text-lg font-bold text-violet-400">
                     {format_percent(model["avg_draft_accepted"])}
@@ -62,8 +74,7 @@ defmodule PantheonWeb.Metrics.Components.ModelOverview do
                   </dt>
                   <dd class="text-xs text-slate-500 leading-none">cache rate</dd>
                 </div>
-                
-    <!-- Errors -->
+
                 <div class="flex items-baseline gap-1.5">
                   <dt class={[
                     "text-lg font-bold",
@@ -76,16 +87,14 @@ defmodule PantheonWeb.Metrics.Components.ModelOverview do
                   </dt>
                   <dd class="text-xs text-slate-500 leading-none">errors</dd>
                 </div>
-                
-    <!-- Token counts -->
+
                 <div class="flex items-baseline gap-1.5">
                   <dt class="text-lg font-bold text-white">
                     {format_tokens(model["total_tokens"])}
                   </dt>
                   <dd class="text-xs text-slate-500 leading-none">total tokens</dd>
                 </div>
-                
-    <!-- Latency -->
+
                 <div class="flex items-baseline gap-1.5">
                   <dt class="text-lg font-bold text-white">
                     {format_latency(model["avg_latency_ms"])}

@@ -13,7 +13,7 @@ defmodule Pantheon.Data.DbHelpers do
     {sql, params} = named_params_to_positional_params(sql, params)
 
     try do
-      result = Ecto.Adapters.SQL.query!(Pantheon.Repo, sql, params)
+      result = Ecto.Adapters.SQL.query!(Pantheon.Repo, sql, params, log: false)
 
       Enum.map(result.rows || [], fn row ->
         Enum.zip(result.columns, row)
@@ -22,9 +22,12 @@ defmodule Pantheon.Data.DbHelpers do
       end)
     rescue
       exception ->
-        Logger.error("Database query failed: #{Exception.message(exception)}")
-        Logger.error("Failed SQL: #{original_sql}")
-        Logger.error("SQL params: #{inspect(original_params, pretty: true)}")
+        Logger.error("""
+        Database query failed: #{Exception.message(exception)}
+        SQL: #{original_sql}
+        Params: #{inspect(original_params, pretty: true)}
+        """)
+
         {:error, {:db_error, Exception.message(exception)}}
     end
   end

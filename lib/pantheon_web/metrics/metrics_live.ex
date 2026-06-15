@@ -2,8 +2,6 @@ defmodule PantheonWeb.Metrics.MetricsLive do
   use PantheonWeb, :live_view
 
   alias Pantheon.Data.CompletionMetricsDB
-  import PantheonWeb.Metrics.Components.MetricsChart
-  import PantheonWeb.Metrics.Components.ModelOverview
 
   @time_ranges %{
     "1h" => 1,
@@ -39,27 +37,20 @@ defmodule PantheonWeb.Metrics.MetricsLive do
     {:ok,
      socket
      |> assign(:time_ranges, @time_ranges)
-     |> assign(:time_range, "24h")
-     |> assign(:time_hours, 24)
-     |> assign(:aggregation_tab, "Provider")
+     |> assign(:time_range, "30d")
+     |> assign(:aggregation_tab, "Model")
      |> assign(:all_chart_metrics, @chart_metrics)
      |> assign(:selected_chart_metrics, MapSet.new(["Requests"]))
      |> assign(:summary, %{})
-     |> assign(:chart_data, [])
-     |> assign(:model_data, [])
-     |> assign(:timeline_data, [])}
+     |> assign(:chart_data, [])}
   end
 
   @impl true
   def handle_event("time_range", %{"range" => range}, socket) do
-    hours = Map.get(@time_ranges, range, socket.assigns.time_hours)
-
     {:noreply,
      socket
      |> assign(:time_range, range)
-     |> assign(:time_hours, hours)
-     |> load_data()
-     |> push_chart_event()}
+     |> load_data()}
   end
 
   @impl true
@@ -67,8 +58,7 @@ defmodule PantheonWeb.Metrics.MetricsLive do
     {:noreply,
      socket
      |> assign(:aggregation_tab, tab)
-     |> load_data()
-     |> push_chart_event()}
+     |> load_data()}
   end
 
   @impl true
@@ -80,87 +70,43 @@ defmodule PantheonWeb.Metrics.MetricsLive do
         MapSet.put(socket.assigns.selected_chart_metrics, metric)
       end
 
-    {:noreply,
-     socket
-     |> assign(:selected_chart_metrics, new_metrics)
-     |> load_data()
-     |> push_chart_event()}
+    {:noreply, assign(socket, :selected_chart_metrics, new_metrics)}
   end
 
   @impl true
   def handle_event("refresh", _params, socket) do
-    {:noreply,
-     socket
-     |> load_data()
-     |> push_chart_event()}
-  end
-
-  @impl true
-  def handle_event("chart_config", _params, socket) do
-    config =
-      PantheonWeb.Metrics.Components.MetricsChart.build_config(
-        socket.assigns.chart_data,
-        @chart_metrics,
-        socket.assigns.selected_chart_metrics
-      )
-
-    {:noreply, push_event(socket, "chart_config", config)}
-  end
-
-  @impl true
-  def handle_event("timeline_chart_config", _params, socket) do
-    config =
-      PantheonWeb.Metrics.Components.MetricsChart.build_timeline_config(
-        socket.assigns.timeline_data
-      )
-
-    {:noreply, push_event(socket, "timeline_chart_config", config)}
+    {:noreply, load_data(socket)}
   end
 
   @impl true
   def handle_info(:load, socket) do
-    {:noreply,
-     socket
-     |> load_data()
-     |> push_chart_event()}
+    {:noreply, load_data(socket)}
   end
 
   defp load_data(socket) do
     socket
     |> load_summary()
     |> load_chart_data()
-    |> load_model_data()
-    |> load_timeline_data()
   end
 
   defp load_summary(socket) do
-    summary = CompletionMetricsDB.aggregate_summary(socket.assigns.time_hours)
+    summary = CompletionMetricsDB.aggregate_summary(time_hours(socket))
     assign(socket, :summary, summary)
   end
 
   defp load_chart_data(socket) do
     data =
       case socket.assigns.aggregation_tab do
-        "Provider" -> CompletionMetricsDB.aggregate_by_provider(socket.assigns.time_hours)
-        "Model" -> CompletionMetricsDB.aggregate_by_model(socket.assigns.time_hours)
-        "User" -> CompletionMetricsDB.aggregate_by_user(socket.assigns.time_hours)
-        "Token" -> CompletionMetricsDB.aggregate_by_api_key(socket.assigns.time_hours)
+        "Provider" -> CompletionMetricsDB.aggregate_by_provider(time_hours(socket))
+        "Model" -> CompletionMetricsDB.aggregate_by_model(time_hours(socket))
+        "User" -> CompletionMetricsDB.aggregate_by_user(time_hours(socket))
+        "Token" -> CompletionMetricsDB.aggregate_by_api_key(time_hours(socket))
       end
 
     assign(socket, :chart_data, data)
   end
 
-  defp load_model_data(socket) do
-    data = CompletionMetricsDB.aggregate_by_model(socket.assigns.time_hours)
-    assign(socket, :model_data, data)
-  end
-
-  defp load_timeline_data(socket) do
-    data = CompletionMetricsDB.timeline_tokens_by_model(socket.assigns.time_hours)
-    assign(socket, :timeline_data, data)
-  end
-
-  # --- Formatting helpers ---
+  defp time_hours(socket), do: Map.fetch!(@time_ranges, socket.assigns.time_range)
 
   defp format_latency(nil), do: "—"
   defp format_latency(ms) when ms < 1000, do: "#{round(ms)}ms"
@@ -170,38 +116,64 @@ defmodule PantheonWeb.Metrics.MetricsLive do
   defp format_tokens(n) when n >= 1_000, do: "#{div(n, 1_000)}K"
   defp format_tokens(n), do: to_string(n)
 
-  # --- Chart event ---
+  defp build_bar_config(chart_data, all_chart_metrics, selected_chart_metrics) do
+    labels = Enum.map(chart_data, & &1["label"])
 
-  defp push_chart_event(socket) do
-    socket =
-      if not Enum.empty?(socket.assigns.chart_data) and
-           MapSet.size(socket.assigns.selected_chart_metrics) > 0 do
-        config =
-          PantheonWeb.Metrics.Components.MetricsChart.build_config(
-            socket.assigns.chart_data,
-            @chart_metrics,
-            socket.assigns.selected_chart_metrics
-          )
+    datasets =
+      for {display_name, key} <- all_chart_metrics,
+          display_name in selected_chart_metrics,
+          into: [] do
+        values =
+          Enum.map(chart_data, fn row ->
+            Map.get(row, to_string(key), 0) || 0
+          end)
 
-        push_event(socket, "chart_config", config)
-      else
-        socket
+        %{
+          label: display_name,
+          data: values,
+          backgroundColor: bar_dataset_color(display_name),
+          borderRadius: 6,
+          barThickness: "flex",
+          maxBarThickness: 80
+        }
       end
 
-    if not Enum.empty?(socket.assigns.timeline_data) do
-      config =
-        PantheonWeb.Metrics.Components.MetricsChart.build_timeline_config(
-          socket.assigns.timeline_data
-        )
-
-      push_event(socket, "timeline_chart_config", config)
-    else
-      socket
-    end
+    %{
+      type: "bar",
+      data: %{labels: labels, datasets: datasets},
+      options: %{
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: %{
+          legend: %{display: true, position: "top"},
+          tooltip: %{enabled: true}
+        },
+        scales: %{
+          x: %{beginAtZero: true, grid: %{color: "rgba(255, 255, 255, 0.06)"}},
+          y: %{grid: %{display: false}}
+        }
+      }
+    }
   end
+
+  defp bar_dataset_color("Requests"), do: "rgba(59, 130, 246, 0.8)"
+  defp bar_dataset_color("Avg Latency (ms)"), do: "rgba(251, 146, 60, 0.8)"
+  defp bar_dataset_color("Min Latency (ms)"), do: "rgba(139, 92, 246, 0.8)"
+  defp bar_dataset_color("Max Latency (ms)"), do: "rgba(236, 72, 153, 0.8)"
+  defp bar_dataset_color("Total Tokens"), do: "rgba(34, 197, 94, 0.8)"
+  defp bar_dataset_color("Prompt Tokens"), do: "rgba(6, 182, 212, 0.8)"
+  defp bar_dataset_color("Completion Tokens"), do: "rgba(234, 179, 8, 0.8)"
+  defp bar_dataset_color("Cached Tokens"), do: "rgba(244, 63, 94, 0.8)"
+  defp bar_dataset_color("Avg Prediction (ms)"), do: "rgba(168, 85, 247, 0.8)"
+  defp bar_dataset_color("Prediction Throughput (t/s)"), do: "rgba(239, 68, 68, 0.8)"
+  defp bar_dataset_color("Draft Acceptance (%)"), do: "rgba(14, 165, 233, 0.8)"
+  defp bar_dataset_color("Errors"), do: "rgba(220, 38, 38, 0.8)"
 
   @impl true
   def render(assigns) do
+    assigns = assign(assigns, :time_hours, Map.fetch!(@time_ranges, assigns.time_range))
+
     ~H"""
     <div>
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
@@ -323,25 +295,26 @@ defmodule PantheonWeb.Metrics.MetricsLive do
             </p>
           </div>
         <% else %>
-          <.metrics_chart id="metrics-chart" />
+          <.live_component
+            module={PantheonWeb.Metrics.Components.ChartJs}
+            id="metrics-chart"
+            chart_config={build_bar_config(@chart_data, @all_chart_metrics, @selected_chart_metrics)}
+          />
         <% end %>
       </div>
 
-      <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-6 mb-8">
-        <h2 class="text-lg font-semibold text-white mb-4">Tokens Over Time by Model</h2>
-        <%= if Enum.empty?(@timeline_data) do %>
-          <div class="flex flex-col items-center justify-center py-16 text-center">
-            <p class="text-lg font-medium text-slate-400 mb-1">No timeline data</p>
-            <p class="text-sm text-slate-500">
-              No token usage found for this time period.
-            </p>
-          </div>
-        <% else %>
-          <.metrics_chart id="timeline-chart" event_name="timeline_chart_config" height="400px" />
-        <% end %>
-      </div>
+      <.live_component
+        module={PantheonWeb.Metrics.Components.TokensOverTime}
+        id="tokens-over-time"
+        time_hours={@time_hours}
+      />
 
-      <.model_overview models={@model_data} time_range={@time_range} />
+      <.live_component
+        module={PantheonWeb.Metrics.Components.ModelOverview}
+        id="model-overview"
+        time_hours={@time_hours}
+        time_range={@time_range}
+      />
     </div>
     """
   end

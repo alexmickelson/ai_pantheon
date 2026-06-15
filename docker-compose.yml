@@ -15,6 +15,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+  # kubectl exec -n pantheon postgres-0 -- bash -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" --clean' | docker exec -i ai_pantheon-db-1 psql -U pantheon_user pantheon_dev
 
   app:
     build:

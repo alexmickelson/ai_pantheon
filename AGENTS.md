@@ -15,15 +15,6 @@ Phoenix connects to Postgres via `Ecto.Repo` (no Ecto schemas). All queries use 
 
 **SQL is only allowed in `*_db.ex` files under `lib/pantheon/data/`.** GenServers, LiveViews, controllers, and other modules must never contain raw SQL — they delegate to the corresponding `*DB` module for all database access.
 
-All runtime config is loaded from `.env` (via Dotenvy) merged with system env vars. Key variables:
-
-`docker compose up` starts two containers:
-
-1. **db** — Postgres 17; `schema.sql` is mounted and run on first start
-2. **app** — Elixir/Phoenix; source is bind-mounted so live reload works
-
-Read application logs with `docker logs ai_pantheon-app-1`
-
 when checking if changes compile use `mix precommit` on the terminal (not in container)
 
 make sure that all error messages are unique so they can be searched and include enough information to reproduce the situation. do not include exact function names in error messages, describe the situation
@@ -32,7 +23,14 @@ use pattern matching on function parameters to enforce required structure
 
 make plans when making large changes. when making plans, ask questions to the user when there are ambiguous requirements that need clarification
 
+the `read_logs.sh` script can be ran to get formatted relevant logs from the docker container.
 
+you can debug local data with:
+```bash
+docker exec -i ai_pantheon-db-1 psql -U pantheon pantheon_dev <<'EOF'
+SELECT ... FROM ... WHERE ... ;
+EOF
+```
 
 ### Error Handling - Getting Errors to the User Interface
 

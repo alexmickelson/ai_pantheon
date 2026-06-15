@@ -22,7 +22,7 @@ jobs:
       - name: Build and push image
         run: |
           IMAGE="ghcr.io/${{ github.repository_owner }}/pantheon-gateway"
-          TAG="${{ github.run_number }}"
+          TAG="33.${{ github.run_number }}"
 
           docker build -q -t "${IMAGE}:${TAG}" .
           docker push "${IMAGE}:${TAG}"

@@ -48,6 +48,12 @@ spec:
                 name: postgres-credentials
             - configMapRef:
                 name: postgres-config
+          env:
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRES_USER
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data

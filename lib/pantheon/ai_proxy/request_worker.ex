@@ -296,10 +296,8 @@ defmodule Pantheon.AiProxy.RequestWorker do
   end
 
   defp log_upstream_http_failure(provider, url, body, model, status, elapsed_ms, response_body) do
-    Logger.warning(fn ->
-      "Upstream completion request failed with provider HTTP response: " <>
-        inspect(
-          reproduction_context(provider, url, body, model)
+    request = %{
+       reproduction_context(provider, url, body, model)
           |> Map.merge(%{
             status: status,
             elapsed_ms: elapsed_ms,
@@ -307,10 +305,13 @@ defmodule Pantheon.AiProxy.RequestWorker do
           }),
           pretty: true,
           limit: :infinity
-        )
+    }
+
+
+    Logger.warning(fn ->
+      "Upstream completion request failed with provider http response #{status} #{inspect(response_body)}"
     end)
   end
-
   defp log_upstream_transport_failure(provider, url, body, model, elapsed_ms, reason) do
     Logger.warning(fn ->
       "Upstream completion request failed before provider response: " <>
@@ -318,7 +319,8 @@ defmodule Pantheon.AiProxy.RequestWorker do
           reproduction_context(provider, url, body, model)
           |> Map.merge(%{
             elapsed_ms: elapsed_ms,
-            transport_error: reason
+            transport_error: reason,
+            body: "really long probs"
           }),
           pretty: true,
           limit: :infinity

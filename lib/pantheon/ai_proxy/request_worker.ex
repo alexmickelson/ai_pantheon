@@ -308,7 +308,7 @@ defmodule Pantheon.AiProxy.RequestWorker do
     # }
 
     Logger.warning(fn ->
-      "Upstream completion request failed with provider #{provider} #{url} #{model} http response #{status} #{inspect(response_body)}"
+      "Upstream completion request failed with provider #{inspect(provider)} #{url} #{model} http response #{status} #{inspect(response_body)}"
     end)
   end
 

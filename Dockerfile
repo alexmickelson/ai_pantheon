@@ -1,4 +1,4 @@
-FROM docker.io/elixir:1.19.5-otp-28-alpine AS build
+FROM docker.io/elixir:1.20-otp-28-alpine AS build
 
 
 ENV MIX_ENV=prod \

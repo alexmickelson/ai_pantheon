@@ -1,4 +1,4 @@
-FROM docker.io/elixir:1.19.5-otp-28-alpine AS build
+FROM docker.io/elixir:1.20-otp-28-alpine AS build
 
 RUN apk add --no-cache build-base git bash nodejs npm inotify-tools postgresql-dev
 

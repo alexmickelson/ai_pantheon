@@ -3,7 +3,7 @@ defmodule PantheonWeb.Proxy.V1Controller do
 
   require Logger
 
-  @stream_done_timeout 30_000
+  # @stream_done_timeout 30_000
 
   def list_models(conn, _params) do
     providers = Pantheon.AIProviders.list()
@@ -137,22 +137,15 @@ defmodule PantheonWeb.Proxy.V1Controller do
         error_json =
           Jason.encode!(%{error: %{message: "Provider returned #{status}", type: "api_error"}})
 
+        Logger.warning("Provider returned #{status} for streaming request: #{error_json}")
+        Logger.warning("#{inspect(request_data, pretty: true, limit: :infinity)}")
+
         chunk(conn, "data: #{error_json}\n\n")
         chunk(conn, "data: [DONE]\n\n")
         conn
 
       {:proxy_stream_init, 503} ->
         error_json = Jason.encode!(%{error: %{message: "Proxy unavailable", type: "api_error"}})
-        chunk(conn, "data: #{error_json}\n\n")
-        chunk(conn, "data: [DONE]\n\n")
-        conn
-    after
-      @stream_done_timeout ->
-        Logger.warning("Timeout waiting for proxy stream initialization")
-
-        error_json =
-          Jason.encode!(%{error: %{message: "Proxy initialization timeout", type: "api_error"}})
-
         chunk(conn, "data: #{error_json}\n\n")
         chunk(conn, "data: [DONE]\n\n")
         conn
@@ -170,16 +163,6 @@ defmodule PantheonWeb.Proxy.V1Controller do
         conn
         |> put_resp_header("content-type", "application/json")
         |> send_resp(status, Jason.encode!(body))
-    after
-      @stream_done_timeout ->
-        Logger.warning("Timeout waiting for proxy response")
-
-        conn
-        |> put_resp_header("content-type", "application/json")
-        |> send_resp(
-          503,
-          Jason.encode!(%{error: %{message: "Proxy response timeout", type: "api_error"}})
-        )
     end
   end
 
@@ -211,11 +194,6 @@ defmodule PantheonWeb.Proxy.V1Controller do
       {:proxy_stream_error, message} ->
         error_json = Jason.encode!(%{error: %{message: message, type: "api_error"}})
         chunk(conn, "data: #{error_json}\n\n")
-        chunk(conn, "data: [DONE]\n\n")
-        conn
-    after
-      @stream_done_timeout ->
-        Logger.warning("Timeout waiting for proxy stream data from provider")
         chunk(conn, "data: [DONE]\n\n")
         conn
     end

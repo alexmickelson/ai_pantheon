@@ -32,7 +32,7 @@ defmodule Pantheon.AiProxy.RequestWorker do
     base_url = String.trim_trailing(provider.endpoint, "/")
     model = Map.get(body, "model", "")
 
-    # body = inject_stream_options(body)
+    body = inject_stream_options(body)
 
     headers = [
       {"Authorization", "Bearer #{provider.auth_token}"},

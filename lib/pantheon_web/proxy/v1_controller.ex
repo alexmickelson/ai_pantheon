@@ -53,6 +53,7 @@ defmodule PantheonWeb.Proxy.V1Controller do
             error: %{message: "Missing required field: model", type: "invalid_request_error"}
           })
 
+        Logger.warning("request model was nil in request params: #{inspect(params)}")
         conn |> send_resp(400, error_body)
 
       "" ->

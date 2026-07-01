@@ -1,5 +1,4 @@
 defmodule Pantheon.Data.UserDB do
-  require Logger
   alias Pantheon.Data.DbHelpers
 
   @datetime_columns [:inserted_at, :updated_at]

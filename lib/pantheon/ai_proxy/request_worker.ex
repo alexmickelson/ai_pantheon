@@ -295,23 +295,23 @@ defmodule Pantheon.AiProxy.RequestWorker do
     Pantheon.Data.CompletionMetricsDB.insert(metrics)
   end
 
-  defp log_upstream_http_failure(provider, url, body, model, status, elapsed_ms, response_body) do
-    request = %{
-       reproduction_context(provider, url, body, model)
-          |> Map.merge(%{
-            status: status,
-            elapsed_ms: elapsed_ms,
-            upstream_response_body: response_body
-          }),
-          pretty: true,
-          limit: :infinity
-    }
-
+  defp log_upstream_http_failure(provider, url, _body, model, status, _elapsed_ms, response_body) do
+    # request = %{
+    #   reproduction_context(provider, url, body, model)
+    #   |> Map.merge(%{
+    #     status: status,
+    #     elapsed_ms: elapsed_ms,
+    #     upstream_response_body: response_body,
+    #     pretty: true,
+    #     limit: :infinity
+    #   })
+    # }
 
     Logger.warning(fn ->
-      "Upstream completion request failed with provider http response #{status} #{inspect(response_body)}"
+      "Upstream completion request failed with provider #{provider} #{url} #{model} http response #{status} #{inspect(response_body)}"
     end)
   end
+
   defp log_upstream_transport_failure(provider, url, body, model, elapsed_ms, reason) do
     Logger.warning(fn ->
       "Upstream completion request failed before provider response: " <>

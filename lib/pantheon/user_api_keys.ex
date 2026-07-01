@@ -1,6 +1,5 @@
 defmodule Pantheon.UserApiKeys do
   use GenServer
-  require Logger
 
   alias Pantheon.Data.UserApiKeyDB
   alias Pantheon.UserErrorNotifier

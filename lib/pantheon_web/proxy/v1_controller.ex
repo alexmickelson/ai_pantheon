@@ -60,6 +60,7 @@ defmodule PantheonWeb.Proxy.V1Controller do
           Jason.encode!(%{
             error: %{message: "Missing required field: model", type: "invalid_request_error"}
           })
+        Logger.warning("Missing required field: model in request params: #{inspect(params)}")
 
         conn |> send_resp(400, error_body)
 

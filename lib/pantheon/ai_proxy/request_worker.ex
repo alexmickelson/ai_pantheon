@@ -40,7 +40,7 @@ defmodule Pantheon.AiProxy.RequestWorker do
       {"Accept", "text/event-stream"}
     ]
 
-    url = build_url(base_url, path, body)
+    url = "#{base_url}#{path}"
 
     case Req.post(url: url, headers: headers, json: body, into: :self) do
       {:ok, %Req.Response{status: 200} = resp} ->
@@ -341,10 +341,5 @@ defmodule Pantheon.AiProxy.RequestWorker do
         json: body
       }
     }
-  end
-
-  defp build_url(base, path, body) do
-    query = if Map.get(body, "stream", false), do: "?stream=true", else: ""
-    "#{base}#{path}#{query}"
   end
 end

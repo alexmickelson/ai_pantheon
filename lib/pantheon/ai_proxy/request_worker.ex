@@ -295,7 +295,7 @@ defmodule Pantheon.AiProxy.RequestWorker do
     Pantheon.Data.CompletionMetricsDB.insert(metrics)
   end
 
-  defp log_upstream_http_failure(provider, url, _body, model, status, _elapsed_ms, response_body) do
+  defp log_upstream_http_failure(_provider, url, body, model, status, _elapsed_ms, response_body) do
     Logger.warning(fn ->
       body_str =
         cond do
@@ -309,6 +309,7 @@ defmodule Pantheon.AiProxy.RequestWorker do
 
       "Upstream completion request failed with provider #{url} #{model} http response #{status} #{body_str}"
     end)
+    Logger.warning("#{inspect(body, pretty: true, limit: :infinity)}")
   end
 
   defp log_upstream_transport_failure(provider, url, body, model, elapsed_ms, reason) do

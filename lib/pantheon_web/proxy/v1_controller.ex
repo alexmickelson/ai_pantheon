@@ -192,7 +192,7 @@ defmodule PantheonWeb.Proxy.V1Controller do
         endpoint: provider.endpoint,
         auth_token: provider.auth_token
       },
-      path: "/v1/completions",
+      path: "/v1/chat/completions",
       body: body_params
     }
   end

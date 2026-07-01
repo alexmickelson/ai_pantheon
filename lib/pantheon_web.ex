@@ -43,7 +43,6 @@ defmodule PantheonWeb do
       use Gettext, backend: PantheonWeb.Gettext
 
       import Plug.Conn
-
       unquote(verified_routes())
     end
   end

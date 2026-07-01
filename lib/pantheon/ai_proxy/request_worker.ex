@@ -67,6 +67,7 @@ defmodule Pantheon.AiProxy.RequestWorker do
       when is_map(resp_body) and not is_struct(resp_body) and status >= 400 ->
         elapsed = System.monotonic_time(:millisecond) - start_time
         error_detail = Map.get(resp_body, "detail", inspect(resp_body))
+        log_upstream_http_failure(provider, url, body, model, status, elapsed, resp_body)
 
         metrics =
           CompletionMetrics.from_error(
@@ -84,9 +85,10 @@ defmodule Pantheon.AiProxy.RequestWorker do
         report(metrics)
         :ok
 
-      {:ok, %Req.Response{status: status}} when status >= 400 ->
+      {:ok, %Req.Response{status: status, body: resp_body}} when status >= 400 ->
         elapsed = System.monotonic_time(:millisecond) - start_time
         error_msg = "Provider returned HTTP #{status}"
+        log_upstream_http_failure(provider, url, body, model, status, elapsed, resp_body)
 
         metrics =
           CompletionMetrics.from_error(
@@ -107,6 +109,7 @@ defmodule Pantheon.AiProxy.RequestWorker do
       {:error, reason} ->
         elapsed = System.monotonic_time(:millisecond) - start_time
         error_msg = Exception.message(reason)
+        log_upstream_transport_failure(provider, url, body, model, elapsed, error_msg)
 
         metrics =
           CompletionMetrics.from_error(
@@ -148,6 +151,7 @@ defmodule Pantheon.AiProxy.RequestWorker do
         metrics =
           if status >= 400 do
             error_detail = Map.get(resp_body, "detail", inspect(resp_body))
+            log_upstream_http_failure(provider, url, body, model, status, elapsed_ms, resp_body)
 
             CompletionMetrics.from_error(
               user_id,
@@ -174,9 +178,10 @@ defmodule Pantheon.AiProxy.RequestWorker do
         report(metrics)
         :ok
 
-      {:ok, %Req.Response{status: status}} when status >= 400 ->
+      {:ok, %Req.Response{status: status, body: resp_body}} when status >= 400 ->
         elapsed_ms = System.monotonic_time(:millisecond) - start_time
         error_msg = "Provider returned HTTP #{status}"
+        log_upstream_http_failure(provider, url, body, model, status, elapsed_ms, resp_body)
 
         metrics =
           CompletionMetrics.from_error(
@@ -200,6 +205,7 @@ defmodule Pantheon.AiProxy.RequestWorker do
       {:error, reason} ->
         elapsed_ms = System.monotonic_time(:millisecond) - start_time
         error_msg = Exception.message(reason)
+        log_upstream_transport_failure(provider, url, body, model, elapsed_ms, error_msg)
 
         metrics =
           CompletionMetrics.from_error(
@@ -223,7 +229,7 @@ defmodule Pantheon.AiProxy.RequestWorker do
   end
 
   defp inject_stream_options(body) do
-    existing_opts = Map.get(body, "stream_options", %{})
+    existing_opts = Map.get(body, "stream_options") || %{}
     Map.put(body, "stream_options", Map.merge(%{"include_usage" => true}, existing_opts))
   end
 
@@ -287,6 +293,54 @@ defmodule Pantheon.AiProxy.RequestWorker do
   defp report(%CompletionMetrics{} = metrics) do
     Logger.debug("Reporting completion metrics: #{inspect(metrics)}")
     Pantheon.Data.CompletionMetricsDB.insert(metrics)
+  end
+
+  defp log_upstream_http_failure(provider, url, body, model, status, elapsed_ms, response_body) do
+    Logger.warning(fn ->
+      "Upstream completion request failed with provider HTTP response: " <>
+        inspect(
+          reproduction_context(provider, url, body, model)
+          |> Map.merge(%{
+            status: status,
+            elapsed_ms: elapsed_ms,
+            upstream_response_body: response_body
+          }),
+          pretty: true,
+          limit: :infinity
+        )
+    end)
+  end
+
+  defp log_upstream_transport_failure(provider, url, body, model, elapsed_ms, reason) do
+    Logger.warning(fn ->
+      "Upstream completion request failed before provider response: " <>
+        inspect(
+          reproduction_context(provider, url, body, model)
+          |> Map.merge(%{
+            elapsed_ms: elapsed_ms,
+            transport_error: reason
+          }),
+          pretty: true,
+          limit: :infinity
+        )
+    end)
+  end
+
+  defp reproduction_context(provider, url, body, model) do
+    %{
+      provider_id: Map.get(provider, :id),
+      provider_endpoint: provider.endpoint,
+      model: model,
+      request: %{
+        method: "POST",
+        url: url,
+        headers: %{
+          "Authorization" => "Bearer <redacted>",
+          "Content-Type" => "application/json"
+        },
+        json: body
+      }
+    }
   end
 
   defp build_url(base, path, body) do

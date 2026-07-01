@@ -296,35 +296,33 @@ defmodule Pantheon.AiProxy.RequestWorker do
   end
 
   defp log_upstream_http_failure(provider, url, _body, model, status, _elapsed_ms, response_body) do
-    # request = %{
-    #   reproduction_context(provider, url, body, model)
-    #   |> Map.merge(%{
-    #     status: status,
-    #     elapsed_ms: elapsed_ms,
-    #     upstream_response_body: response_body,
-    #     pretty: true,
-    #     limit: :infinity
-    #   })
-    # }
-
     Logger.warning(fn ->
-      "Upstream completion request failed with provider #{inspect(provider)} #{url} #{model} http response #{status} #{inspect(response_body)}"
+      body_str =
+        cond do
+          is_binary(response_body) ->
+            response_body
+          is_map(response_body) ->
+            inspect(response_body)
+          true ->
+            "<inspectable: #{inspect(response_body, pretty: true, limit: :infinity)}>"
+        end
+
+      "Upstream completion request failed with provider #{url} #{model} http response #{status} #{body_str}"
     end)
   end
 
   defp log_upstream_transport_failure(provider, url, body, model, elapsed_ms, reason) do
     Logger.warning(fn ->
+      ctx =
+        reproduction_context(provider, url, body, model)
+        |> Map.merge(%{
+          elapsed_ms: elapsed_ms,
+          transport_error: reason,
+          body: "really long probs"
+        })
+
       "Upstream completion request failed before provider response: " <>
-        inspect(
-          reproduction_context(provider, url, body, model)
-          |> Map.merge(%{
-            elapsed_ms: elapsed_ms,
-            transport_error: reason,
-            body: "really long probs"
-          }),
-          pretty: true,
-          limit: :infinity
-        )
+        inspect(ctx, pretty: true, limit: :infinity)
     end)
   end
 

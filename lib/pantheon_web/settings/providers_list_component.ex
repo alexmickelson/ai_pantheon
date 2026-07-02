@@ -69,7 +69,7 @@ defmodule PantheonWeb.Settings.ProvidersListComponent do
          socket
          |> assign(:deleting_provider_id, nil)
          |> stream(:providers, providers, reset: true)
-         |> put_flash(:info, "Provider removed")}
+         |> put_flash(:info, "Provider disconnected")}
 
       {:error, reason} ->
         {:noreply,
@@ -138,7 +138,7 @@ defmodule PantheonWeb.Settings.ProvidersListComponent do
 
                     <div class="flex gap-2 shrink-0">
                       <%= if @deleting_provider_id == provider.id do %>
-                        <span class="text-xs text-red-400 mr-2">Remove?</span>
+                        <span class="text-xs text-red-400 mr-2">Disconnect?</span>
                         <button
                           type="button"
                           phx-click="confirm_delete"
@@ -185,7 +185,7 @@ defmodule PantheonWeb.Settings.ProvidersListComponent do
                           phx-target={@myself}
                           class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-red-400 rounded-lg hover:bg-red-900/30 transition-colors"
                         >
-                          Delete
+                          Disconnect
                         </button>
                       <% end %>
                     </div>

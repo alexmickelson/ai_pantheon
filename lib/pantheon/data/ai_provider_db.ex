@@ -19,6 +19,7 @@ defmodule Pantheon.Data.AIProviderDB do
     sql = """
     SELECT id, name, endpoint, auth_token, inserted_at, updated_at
     FROM ai_providers
+    WHERE deleted_at IS NULL
     ORDER BY name ASC
     """
 
@@ -77,7 +78,7 @@ defmodule Pantheon.Data.AIProviderDB do
     SET name = COALESCE($(name), name),
         endpoint = COALESCE($(endpoint), endpoint),
         auth_token = COALESCE($(auth_token), auth_token)
-    WHERE id = $(id)
+    WHERE id = $(id) AND deleted_at IS NULL
     RETURNING id, name, endpoint, auth_token, inserted_at, updated_at
     """
 
@@ -113,11 +114,15 @@ defmodule Pantheon.Data.AIProviderDB do
   end
 
   def delete(provider_id) do
-    sql = "DELETE FROM ai_providers WHERE id = $(id)"
+    sql = "UPDATE ai_providers SET deleted_at = NOW() WHERE id = $(id) AND deleted_at IS NULL"
 
     case DbHelpers.run_sql(sql, %{"id" => provider_id}) do
-      [] ->
+      [_] ->
         :ok
+
+      [] ->
+        {:error,
+         "Could not delete AI provider #{inspect(provider_id)}. No active provider found with that ID."}
 
       {:error, {:db_error, reason}} ->
         msg = "Could not delete AI provider #{inspect(provider_id)}. Database error: #{reason}"
@@ -130,6 +135,7 @@ defmodule Pantheon.Data.AIProviderDB do
     sql = """
     SELECT id, name, endpoint, auth_token, inserted_at, updated_at
     FROM ai_providers
+    WHERE deleted_at IS NULL
     """
 
     case DbHelpers.run_sql(sql, %{})

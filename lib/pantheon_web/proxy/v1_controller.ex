@@ -50,6 +50,7 @@ defmodule PantheonWeb.Proxy.V1Controller do
       nil ->
         message = "Missing required field: model in request params: #{inspect(params)}"
         Logger.warning(message)
+
         error_body =
           Jason.encode!(%{
             error: %{message: message}
@@ -60,6 +61,7 @@ defmodule PantheonWeb.Proxy.V1Controller do
       "" ->
         message = "Missing required field: model in request params: #{inspect(params)}"
         Logger.warning(message)
+
         error_body =
           Jason.encode!(%{
             error: %{message: message}

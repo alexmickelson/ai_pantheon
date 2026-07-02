@@ -7,12 +7,33 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS ai_providers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
   endpoint TEXT NOT NULL,
   auth_token TEXT NOT NULL,
+  deleted_at TIMESTAMPTZ,
   inserted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns WHERE table_name = 'ai_providers' AND column_name = 'deleted_at'
+  ) THEN
+    ALTER TABLE ai_providers ADD COLUMN deleted_at TIMESTAMPTZ;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_indexes WHERE indexname = 'ai_providers_name_key'
+  ) THEN
+    DROP INDEX ai_providers_name_key;
+  END IF;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_providers_name_unique ON ai_providers(name) WHERE deleted_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS user_api_keys (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
